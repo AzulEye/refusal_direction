@@ -129,7 +129,7 @@ def run_paper_experiment():
         intervention_label="actadd", dataset_name="harmless"
     )
     evaluate_completions_and_save_results_for_dataset(
-        cfg, intervention_label="actadd", dataset_name="harmless",
+        cfg, intervention_label="actadd", dataset_name="alpaca",
         eval_methodologies=["substring_matching"]
     )
     
