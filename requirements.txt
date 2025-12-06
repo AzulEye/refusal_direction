@@ -1,5 +1,5 @@
 torch
-transformers>=4.57.3
+git+https://github.com/huggingface/transformers.git
 accelerate
 datasets
 einops
