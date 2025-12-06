@@ -2,7 +2,7 @@
 import torch
 import functools
 from torch import Tensor
-from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
+from torch import Tensor
 from typing import List
 from jaxtyping import Float
 
@@ -61,16 +61,28 @@ def act_add_qwen3_vl_weights(model, direction: Float[Tensor, "d_model"], coeff, 
 
 class Qwen3VLModel(ModelBase):
     def _load_model(self, model_path, dtype=torch.float16):
-         model = Qwen3VLForConditionalGeneration.from_pretrained(
+        try:
+            from transformers import Qwen3VLForConditionalGeneration
+        except ImportError as e:
+            import transformers
+            raise ImportError(f"Could not import Qwen3VLForConditionalGeneration. Transformers version: {transformers.__version__}. Error: {e}")
+        
+        model = Qwen3VLForConditionalGeneration.from_pretrained(
             model_path,
             torch_dtype=dtype,
             device_map="auto"
             # trust_remote_code might be needed or not, depends on HF version. 4.57+ has it.
          ).eval()
-         model.requires_grad_(False)
-         return model
+        model.requires_grad_(False)
+        return model
 
     def _load_tokenizer(self, model_path):
+        try:
+            from transformers import AutoProcessor
+        except ImportError as e:
+            import transformers
+            raise ImportError(f"Could not import AutoProcessor. Transformers version: {transformers.__version__}. Error: {e}")
+
         # We use the processor to get the tokenizer
         processor = AutoProcessor.from_pretrained(model_path)
         tokenizer = processor.tokenizer
