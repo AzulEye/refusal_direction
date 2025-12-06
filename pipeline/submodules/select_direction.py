@@ -80,8 +80,12 @@ def plot_refusal_scores(
     # Create a figure and an axis
     fig, ax = plt.subplots(figsize=(9, 5))  # width and height in inches
 
+    print(f"DEBUG: n_pos={n_pos}, len(token_labels)={len(token_labels)}")
+    print(f"DEBUG: token_labels={token_labels}")
+
     # Add a trace for each position to extract
     for i in range(-n_pos, 0):
+        print(f"DEBUG: accessing index {i}")
         ax.plot(
             list(range(n_layer)),
             refusal_scores[i].cpu().numpy(),
