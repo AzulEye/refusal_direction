@@ -58,7 +58,7 @@ def run_paper_experiment():
     )
     evaluate_completions_and_save_results_for_dataset(
         cfg, intervention_label="baseline", dataset_name="jailbreakbench", 
-        methodologies=["substring_matching", "qwen3guard"]
+        eval_methodologies=["substring_matching", "qwen3guard"]
     )
     
     # B. Ablation (Removal)
@@ -101,7 +101,7 @@ def run_paper_experiment():
     )
     evaluate_completions_and_save_results_for_dataset(
         cfg, intervention_label="ablation", dataset_name="jailbreakbench",
-        methodologies=["substring_matching", "qwen3guard"]
+        eval_methodologies=["substring_matching", "qwen3guard"]
     )
     
     # C. ActAdd (Refusal Induction / Jailbreak Mitigation?)
@@ -116,7 +116,7 @@ def run_paper_experiment():
     )
     evaluate_completions_and_save_results_for_dataset(
         cfg, intervention_label="actadd", dataset_name="jailbreakbench",
-        methodologies=["substring_matching", "qwen3guard"]
+        eval_methodologies=["substring_matching", "qwen3guard"]
     )
     
     # D. Harmless Refusal Induction (Add)
@@ -130,7 +130,7 @@ def run_paper_experiment():
     )
     evaluate_completions_and_save_results_for_dataset(
         cfg, intervention_label="actadd", dataset_name="harmless",
-        methodologies=["substring_matching"]
+        eval_methodologies=["substring_matching"]
     )
     
     print("Paper Experiment Run Complete!")
