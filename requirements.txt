@@ -1,5 +1,5 @@
 torch
-transformers==4.37.2
+transformers>=4.57.3
 accelerate
 datasets
 einops
@@ -14,3 +14,5 @@ python-dotenv
 scikit-learn
 jaxtyping
 transformers_stream_generator
+
+torchvision
