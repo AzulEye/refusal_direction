@@ -86,10 +86,15 @@ def plot_refusal_scores(
     # Add a trace for each position to extract
     for i in range(-n_pos, 0):
         print(f"DEBUG: accessing index {i}")
+        try:
+            label_text = repr(token_labels[i])
+        except IndexError:
+            label_text = f"Pos {i} (Label Missing)"
+            
         ax.plot(
             list(range(n_layer)),
             refusal_scores[i].cpu().numpy(),
-            label=f'{i}: {repr(token_labels[i])}'
+            label=f'{i}: {label_text}'
         )
 
     if baseline_refusal_score is not None:
