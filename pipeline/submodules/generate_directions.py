@@ -19,12 +19,17 @@ def get_mean_activations(model, tokenizer, instructions, tokenize_instructions_f
     torch.cuda.empty_cache()
 
     n_positions = len(positions)
-    n_layers = model.config.num_hidden_layers
+    if hasattr(model.config, "text_config"):
+        n_layers = model.config.text_config.num_hidden_layers
+        d_model = model.config.text_config.hidden_size
+    else:
+        n_layers = model.config.num_hidden_layers
+        d_model = model.config.hidden_size
+    
     n_samples = len(instructions)
-    d_model = model.config.hidden_size
 
     # we store the mean activations in high-precision to avoid numerical issues
-    mean_activations = torch.zeros((n_positions, n_layers, d_model), dtype=torch.float64, device=model.device)
+    mean_activations = torch.zeros((n_positions, n_layers, d_model), dtype=torch.float32, device=model.device)
 
     fwd_pre_hooks = [(block_modules[layer], get_mean_activations_pre_hook(layer=layer, cache=mean_activations, n_samples=n_samples, positions=positions)) for layer in range(n_layers)]
 
@@ -51,9 +56,16 @@ def generate_directions(model_base: ModelBase, harmful_instructions, harmless_in
     if not os.path.exists(artifact_dir):
         os.makedirs(artifact_dir)
 
+    if hasattr(model_base.model.config, "text_config"):
+        n_layers = model_base.model.config.text_config.num_hidden_layers
+        d_model = model_base.model.config.text_config.hidden_size
+    else:
+        n_layers = model_base.model.config.num_hidden_layers
+        d_model = model_base.model.config.hidden_size # this line was missing
+
     mean_diffs = get_mean_diff(model_base.model, model_base.tokenizer, harmful_instructions, harmless_instructions, model_base.tokenize_instructions_fn, model_base.model_block_modules, positions=list(range(-len(model_base.eoi_toks), 0)))
 
-    assert mean_diffs.shape == (len(model_base.eoi_toks), model_base.model.config.num_hidden_layers, model_base.model.config.hidden_size)
+    assert mean_diffs.shape == (len(model_base.eoi_toks), n_layers, d_model)
     assert not mean_diffs.isnan().any()
 
     torch.save(mean_diffs, f"{artifact_dir}/mean_diffs.pt")

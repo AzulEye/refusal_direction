@@ -80,7 +80,7 @@ def batch_iterator_pile(tokenizer, batch_size, max_length):
         yield inputs, loss_mask
 
 def compute_loss_over_dataset(model, tokenizer, batch_iterator, n_batches=256, fwd_pre_hooks=[], fwd_hooks=[]):
-    accumulated_loss = torch.tensor(0, dtype=torch.float64, device=model.device)
+    accumulated_loss = torch.tensor(0, dtype=torch.float32, device=model.device)
     accumulated_n_tokens = torch.tensor(0, dtype=torch.int64, device=model.device)
 
     batch_idx = 0

@@ -19,7 +19,7 @@ def refusal_score(
     refusal_toks: Int[Tensor, 'batch seq'],
     epsilon: Float = 1e-8,
 ):
-    logits = logits.to(torch.float64)
+    logits = logits.to(torch.float32)
 
     # we only care about the last tok position
     logits = logits[:, -1, :]
@@ -133,9 +133,9 @@ def select_direction(
     baseline_refusal_scores_harmful = get_refusal_scores(model_base.model, harmful_instructions, model_base.tokenize_instructions_fn, model_base.refusal_toks, fwd_hooks=[], batch_size=batch_size)
     baseline_refusal_scores_harmless = get_refusal_scores(model_base.model, harmless_instructions, model_base.tokenize_instructions_fn, model_base.refusal_toks, fwd_hooks=[], batch_size=batch_size)
 
-    ablation_kl_div_scores = torch.zeros((n_pos, n_layer), device=model_base.model.device, dtype=torch.float64)
-    ablation_refusal_scores = torch.zeros((n_pos, n_layer), device=model_base.model.device, dtype=torch.float64)
-    steering_refusal_scores = torch.zeros((n_pos, n_layer), device=model_base.model.device, dtype=torch.float64)
+    ablation_kl_div_scores = torch.zeros((n_pos, n_layer), device=model_base.model.device, dtype=torch.float32)
+    ablation_refusal_scores = torch.zeros((n_pos, n_layer), device=model_base.model.device, dtype=torch.float32)
+    steering_refusal_scores = torch.zeros((n_pos, n_layer), device=model_base.model.device, dtype=torch.float32)
 
     baseline_harmless_logits = get_last_position_logits(
         model=model_base.model,
@@ -151,9 +151,9 @@ def select_direction(
         for source_layer in tqdm(range(n_layer), desc=f"Computing KL for source position {source_pos}"):
 
             ablation_dir = candidate_directions[source_pos, source_layer]
-            fwd_pre_hooks = [(model_base.model_block_modules[layer], get_direction_ablation_input_pre_hook(direction=ablation_dir)) for layer in range(model_base.model.config.num_hidden_layers)]
-            fwd_hooks = [(model_base.model_attn_modules[layer], get_direction_ablation_output_hook(direction=ablation_dir)) for layer in range(model_base.model.config.num_hidden_layers)]
-            fwd_hooks += [(model_base.model_mlp_modules[layer], get_direction_ablation_output_hook(direction=ablation_dir)) for layer in range(model_base.model.config.num_hidden_layers)]
+            fwd_pre_hooks = [(model_base.model_block_modules[layer], get_direction_ablation_input_pre_hook(direction=ablation_dir)) for layer in range(n_layer)]
+            fwd_hooks = [(model_base.model_attn_modules[layer], get_direction_ablation_output_hook(direction=ablation_dir)) for layer in range(n_layer)]
+            fwd_hooks += [(model_base.model_mlp_modules[layer], get_direction_ablation_output_hook(direction=ablation_dir)) for layer in range(n_layer)]
 
             intervention_logits: Float[Tensor, "n_instructions 1 d_vocab"] = get_last_position_logits(
                 model=model_base.model,
@@ -171,9 +171,9 @@ def select_direction(
         for source_layer in tqdm(range(n_layer), desc=f"Computing refusal ablation for source position {source_pos}"):
 
             ablation_dir = candidate_directions[source_pos, source_layer]
-            fwd_pre_hooks = [(model_base.model_block_modules[layer], get_direction_ablation_input_pre_hook(direction=ablation_dir)) for layer in range(model_base.model.config.num_hidden_layers)]
-            fwd_hooks = [(model_base.model_attn_modules[layer], get_direction_ablation_output_hook(direction=ablation_dir)) for layer in range(model_base.model.config.num_hidden_layers)]
-            fwd_hooks += [(model_base.model_mlp_modules[layer], get_direction_ablation_output_hook(direction=ablation_dir)) for layer in range(model_base.model.config.num_hidden_layers)]
+            fwd_pre_hooks = [(model_base.model_block_modules[layer], get_direction_ablation_input_pre_hook(direction=ablation_dir)) for layer in range(n_layer)]
+            fwd_hooks = [(model_base.model_attn_modules[layer], get_direction_ablation_output_hook(direction=ablation_dir)) for layer in range(n_layer)]
+            fwd_hooks += [(model_base.model_mlp_modules[layer], get_direction_ablation_output_hook(direction=ablation_dir)) for layer in range(n_layer)]
 
             refusal_scores = get_refusal_scores(model_base.model, harmful_instructions, model_base.tokenize_instructions_fn, model_base.refusal_toks, fwd_pre_hooks=fwd_pre_hooks, fwd_hooks=fwd_hooks, batch_size=batch_size)
             ablation_refusal_scores[source_pos, source_layer] = refusal_scores.mean().item()
@@ -312,8 +312,8 @@ def kl_div_fn(
     """
     Compute the KL divergence loss between two tensors of logits.
     """
-    logits_a = logits_a.to(torch.float64)
-    logits_b = logits_b.to(torch.float64)
+    logits_a = logits_a.to(torch.float32)
+    logits_b = logits_b.to(torch.float32)
 
     probs_a = logits_a.softmax(dim=-1)
     probs_b = logits_b.softmax(dim=-1)

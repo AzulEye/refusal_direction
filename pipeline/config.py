@@ -6,16 +6,16 @@ from typing import Tuple
 
 @dataclass
 class Config:
-    model_alias: str
-    model_path: str
-    n_train: int = 128
-    n_test: int = 100
-    n_val: int = 32
+    model_alias: str = "Qwen3-VL-2B-Instruct"
+    model_path: str = "Qwen/Qwen3-VL-2B-Instruct"
+    n_train: int = 32
+    n_test: int = 10
+    n_val: int = 10
     filter_train: bool = True
     filter_val: bool = True
     evaluation_datasets: Tuple[str] = ("jailbreakbench",)
     max_new_tokens: int = 512
-    jailbreak_eval_methodologies: Tuple[str] = ("substring_matching", "llamaguard2")
+    jailbreak_eval_methodologies: Tuple[str] = ("substring_matching", "qwen3guard")
     refusal_eval_methodologies: Tuple[str] = ("substring_matching",)
     ce_loss_batch_size: int = 2
     ce_loss_n_batches: int = 2048

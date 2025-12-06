@@ -101,6 +101,11 @@ def generate_and_save_completions_for_dataset(cfg, model_base, fwd_pre_hooks, fw
 
     if dataset is None:
         dataset = load_dataset(dataset_name)
+        # Sample dataset if it's too large, for minimal run
+        if len(dataset) > cfg.n_test:
+             import random
+             random.seed(42)
+             dataset = random.sample(dataset, cfg.n_test)
 
     completions = model_base.generate_completions(dataset, fwd_pre_hooks=fwd_pre_hooks, fwd_hooks=fwd_hooks, max_new_tokens=cfg.max_new_tokens)
     

@@ -2,6 +2,9 @@ from pipeline.model_utils.model_base import ModelBase
 
 def construct_model_base(model_path: str) -> ModelBase:
 
+    if 'qwen3-vl' in model_path.lower():
+        from pipeline.model_utils.qwen3_vl_model import Qwen3VLModel
+        return Qwen3VLModel(model_path)
     if 'qwen' in model_path.lower():
         from pipeline.model_utils.qwen_model import QwenModel
         return QwenModel(model_path)
