@@ -6,7 +6,7 @@ import numpy as np
 from pipeline.config import Config
 from pipeline.run_pipeline import (
     load_and_sample_datasets,
-    fit_and_save_direction,
+    select_and_save_direction,
     generate_and_save_candidate_directions,
     generate_and_save_completions_for_dataset,
     evaluate_completions_and_save_results_for_dataset
@@ -38,7 +38,7 @@ def run_paper_experiment():
     
     # 4. Generate & Select Direction
     candidate_directions = generate_and_save_candidate_directions(cfg, model_base, harmful_train, harmless_train)
-    refusal_dir, layer, pos = fit_and_save_direction(cfg, model_base, candidate_directions, harmful_val, harmless_val)
+    pos, layer, refusal_dir = select_and_save_direction(cfg, model_base, harmful_val, harmless_val, candidate_directions)
     
     print(f"Selected Refusal Direction: Layer {layer}, Position {pos}")
 
