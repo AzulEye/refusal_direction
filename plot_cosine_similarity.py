@@ -153,37 +153,8 @@ def plot_cosine_similarity(args):
     if args.image_file:
         print(f"Loading image from {args.image_file}")
         img = Image.open(args.image_file).convert("RGB")
-        # Resize to 512 longer side, ensuring dimensions are multiples of 28 (patch * merge)
-        # Qwen-VL models typically require resolutions to be multiples of 28.
-        max_side = 512
-        patch_size = 28
-        
-        if max(img.size) > max_side:
-            scale = max_side / max(img.size)
-            new_width = int(img.width * scale)
-            new_height = int(img.height * scale)
-            
-            # Snap to multiple of 28
-            new_width = round(new_width / patch_size) * patch_size
-            new_height = round(new_height / patch_size) * patch_size
-            
-            # Ensure at least one patch
-            new_width = max(new_width, patch_size)
-            new_height = max(new_height, patch_size)
-
-            img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-            print(f"Resized image to {img.size} (snapped to multiples of {patch_size})")
-        else:
-             # Even if not resizing down, we should ensure divisibility if the processor doesn't strictly enforce it 
-             # (though processor usually does for raw paths, we are passing PIL objects).
-             # It's safer to ensure it here too just in case.
-             w, h = img.size
-             new_w = round(w / patch_size) * patch_size
-             new_h = round(h / patch_size) * patch_size
-             if new_w != w or new_h != h:
-                 img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-                 print(f"Adjusted image to {img.size} for patch alignment")
-
+        print(f"Loaded image: {args.image_file} (Size: {img.size})")
+        # We rely on the model's processor to resize/patch the image correctly.
         pil_image = img
     
     for i, prompt in enumerate(prompts):
