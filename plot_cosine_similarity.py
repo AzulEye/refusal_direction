@@ -8,6 +8,8 @@ import numpy as np
 import json
 from tqdm import tqdm
 import transformers
+import transformers
+from PIL import Image
 import sys
 from types import ModuleType
 
@@ -144,11 +146,34 @@ def plot_cosine_similarity(args):
     output_dir = "measurements/cosine_similarity"
     os.makedirs(output_dir, exist_ok=True)
     
+    # Pre-load image if provided
+    pil_image = None
+    if args.image_file:
+        print(f"Loading image from {args.image_file}")
+        img = Image.open(args.image_file).convert("RGB")
+        # Resize to 512 longer side
+        max_side = 512
+        if max(img.size) > max_side:
+            scale = max_side / max(img.size)
+            new_size = (int(img.width * scale), int(img.height * scale))
+            img = img.resize(new_size, Image.Resampling.LANCZOS)
+            print(f"Resized image to {img.size}")
+        pil_image = img
+    
     for i, prompt in enumerate(prompts):
         print(f"Processing prompt {i+1}/{len(prompts)}: {prompt[:30]}...")
         
-        # Use model_base abstraction for tokenization which handles different models
-        inputs = model_base.tokenize_instructions_fn(instructions=[prompt])
+        # Use model_base abstraction
+        # If image is provided, we need to bypass the partial or pass kwargs if supported.
+        # `model_base.tokenize_instructions_fn` is a partial. 
+        # But Qwen3VLModel.tokenize_instructions accepts images.
+        # We can try calling the partial with `images=...`
+        
+        if pil_image:
+            inputs = model_base.tokenize_instructions_fn(instructions=[prompt], images=pil_image)
+        else:
+            inputs = model_base.tokenize_instructions_fn(instructions=[prompt])
+            
         inputs = inputs.to(model.device)
         
         tokens = [tokenizer.decode([t]) for t in inputs.input_ids[0]]
@@ -212,5 +237,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_alias", type=str, required=True, help="Model alias (e.g., Qwen3-VL-8B-Instruct)")
     parser.add_argument("--prompts_file", type=str, required=True, help="Path to text file with prompts")
+    parser.add_argument("--image_file", type=str, default=None, help="Optional path to image file for VLM")
     args = parser.parse_args()
     plot_cosine_similarity(args)

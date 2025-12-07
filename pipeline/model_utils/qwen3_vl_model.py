@@ -84,7 +84,14 @@ class Qwen3VLModel(ModelBase):
             raise ImportError(f"Could not import AutoProcessor. Transformers version: {transformers.__version__}. Error: {e}")
 
         # We use the processor to get the tokenizer
-        processor = AutoProcessor.from_pretrained(model_path)
+        try:
+            processor = AutoProcessor.from_pretrained(model_path)
+        except Exception:
+            # Fallback if AutoProcessor fails (e.g. some older versions)
+            from transformers import AutoTokenizer
+            return AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+
+        self.processor = processor
         tokenizer = processor.tokenizer
         tokenizer.padding_side = 'left'
         tokenizer.pad_token_id = tokenizer.eos_token_id if tokenizer.pad_token_id is None else tokenizer.pad_token_id
@@ -94,15 +101,57 @@ class Qwen3VLModel(ModelBase):
         # Using chat template from tokenizer
         return functools.partial(self.tokenize_instructions, tokenizer=self.tokenizer)
 
-    def tokenize_instructions(self, instructions, tokenizer, include_trailing_whitespace=True):
+    def tokenize_instructions(self, instructions, tokenizer, include_trailing_whitespace=True, images=None):
         # Adapt list of strings to list of chat messages
+        # If images is provided, it should be a list of PIL images or None.
+        # IF images is provided, we assume 1 image per instruction or 1 global image?
+        # For simplicity, if images is a single PIL Image, use it for all.
+        # If images is a list, match 1-to-1.
+        
+        if hasattr(self, 'processor') and images is not None:
+             # Use Processor
+             prompts = []
+             # Prepare full inputs
+             # Qwen3-VL processor usage: processor(text=..., images=..., ...)
+             
+             # Construct Chat Template for EACH instruction
+             texts = []
+             for instr in instructions:
+                 # Construct valid Qwen3-VL message
+                 # Using the <|image_pad|> placeholder logic or official chat template?
+                 # Official: content=[{'type': 'image', 'image': ...}, {'type': 'text', 'text': ...}]
+                 # But we don't have the image path here easily if passing PIL objects to apply_chat_template?
+                 # Actually apply_chat_template expects paths or base64 usually if 'image' key is used.
+                 # BUT, we can just construct the raw text prompt manually if we know the special tokens.
+                 # Qwen3-VL usually uses <|vision_start|><|image_pad|>...<|vision_end|>
+                 # Let's rely on the tokenizer's chat template if possible.
+                 
+                 messages = [
+                     {
+                         "role": "user", 
+                         "content": [
+                             {"type": "image"}, # Placeholder for processor to fill?
+                             {"type": "text", "text": instr}
+                         ]
+                     }
+                 ]
+                 # We need to format this using apply_chat_template
+                 text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+                 texts.append(text)
+             
+             # Process with images
+             # If images is a single image, repeat it?
+             if not isinstance(images, list):
+                 images = [images] * len(instructions)
+                 
+             # processor expects 'images' as list of images (one per prompt? or mixed?)
+             # standard: processor(text=texts, images=images, ...)
+             return self.processor(text=texts, images=images, padding=True, return_tensors="pt")
+        
+        # Text only fallback
         prompts = []
         for instr in instructions:
             messages = [{"role": "user", "content": [{"type": "text", "text": instr}]}] 
-            # Note: Qwen3-VL template handles text-only. 
-            # We use apply_chat_template to get the raw string, then tokenize?
-            # Or tokenize directly.
-            
             text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
             prompts.append(text)
             
