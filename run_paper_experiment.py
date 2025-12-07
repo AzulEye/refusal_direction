@@ -17,11 +17,11 @@ from pipeline.utils.hook_utils import get_activation_addition_input_pre_hook
 # Auto-detection in evaluate_jailbreak.py will select 8B model on GPU
 # os.environ["QWEN3_GUARD_MODEL_ID"] = "Qwen/Qwen3Guard-Gen-8B"
 
-def run_paper_experiment():
+def run_paper_experiment(args):
     # 1. Configuration
     cfg = Config(
-        model_alias="Qwen3-VL-8B-Instruct",
-        model_path="Qwen/Qwen3-VL-8B-Instruct",
+        model_alias=args.model_alias,
+        model_path=args.model_path,
         n_train=128,
         n_test=100,  # Full size evaluation for paper
         n_val=32,
@@ -136,4 +136,10 @@ def run_paper_experiment():
     print("Paper Experiment Run Complete!")
 
 if __name__ == "__main__":
-    run_paper_experiment()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model_alias", type=str, default="Qwen3-VL-8B-Instruct", help="Model alias")
+    parser.add_argument("--model_path", type=str, default="Qwen/Qwen3-VL-8B-Instruct", help="Model path")
+    args = parser.parse_args()
+    
+    run_paper_experiment(args)
