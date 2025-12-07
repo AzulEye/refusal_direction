@@ -227,6 +227,7 @@ def select_direction(
     )
 
     filtered_scores = []
+    all_candidates = [] # Fallback list
     json_output_all_scores = []
     json_output_filtered_scores = []
 
@@ -248,6 +249,8 @@ def select_direction(
             # we sort the directions in descending order (from highest to lowest score)
             # the intervention is better at bypassing refusal if the refusal score is low, so we multiply by -1
             sorting_score = -refusal_score
+            
+            all_candidates.append((sorting_score, source_pos, source_layer))
 
             # we filter out directions if the KL threshold 
             discard_direction = filter_fn(
@@ -282,7 +285,11 @@ def select_direction(
     with open(f"{artifact_dir}/direction_evaluations_filtered.json", 'w') as f:
         json.dump(json_output_filtered_scores, f, indent=4)
 
-    assert len(filtered_scores) > 0, "All scores have been filtered out!"
+    if len(filtered_scores) == 0:
+        print("WARNING: All scores have been filtered out! usage fallback: using best candidate ignoring thresholds.")
+        filters_str = f"KL < {kl_threshold}, Induce > {induce_refusal_threshold}, Prune < {prune_layer_percentage}"
+        print(f"Filter criteria were: {filters_str}")
+        filtered_scores = all_candidates
 
     # sorted in descending order
     filtered_scores = sorted(filtered_scores, key=lambda x: x[0], reverse=True)
