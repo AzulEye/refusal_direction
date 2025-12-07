@@ -82,7 +82,8 @@ def plot_cosine_similarity(args):
         "Qwen-1.8B-Chat": "Qwen/Qwen-1_8B-Chat",
         "qwen-1_8b-chat": "Qwen/Qwen-1_8B-Chat", # Handle the directory name case
         "gemma-2b-it": "google/gemma-2b-it",
-        "Qwen3-VL-32B-Instruct-FP8": "Qwen/Qwen3-VL-32B-Instruct-FP8"
+        "Qwen3-VL-32B-Instruct-FP8": "Qwen/Qwen3-VL-32B-Instruct-FP8",
+        "Qwen3-VL-32B-Instruct": "Qwen/Qwen3-VL-32B-Instruct"
     }
     
     if args.model_path:
