@@ -8,8 +8,9 @@ pip install --upgrade pillow
 # Ensure latest transformers for FP8 support
 pip install --upgrade transformers accelerate
 
-MODEL_ALIAS="Qwen3-VL-32B-Instruct-FP8"
-MODEL_PATH="Qwen/Qwen3-VL-32B-Instruct-FP8"
+# User requested lowest precision A100 supports (BF16/FP16) on standard model
+MODEL_ALIAS="Qwen3-VL-32B-Instruct"
+MODEL_PATH="Qwen/Qwen3-VL-32B-Instruct"
 
 echo "Running paper experiment for $MODEL_ALIAS..."
 python run_paper_experiment.py --model_alias "$MODEL_ALIAS" --model_path "$MODEL_PATH"
