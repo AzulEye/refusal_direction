@@ -81,15 +81,17 @@ def plot_cosine_similarity(args):
         "Qwen3-VL-8B-Instruct": "Qwen/Qwen3-VL-8B-Instruct",
         "Qwen-1.8B-Chat": "Qwen/Qwen-1_8B-Chat",
         "qwen-1_8b-chat": "Qwen/Qwen-1_8B-Chat", # Handle the directory name case
-        "gemma-2b-it": "google/gemma-2b-it"
+        "gemma-2b-it": "google/gemma-2b-it",
+        "Qwen3-VL-32B-Instruct-FP8": "Qwen/Qwen3-VL-32B-Instruct-FP8"
     }
-    path = model_paths.get(args.model_alias)
-    if not path:
-        # Heuristic: If alias contains "Qwen", assume "Qwen/" prefix?
-        # Better: just use alias as path if checks pass, or assume mapped.
-        # For this task, strict mapping is safer.
-        print(f"Warning: No explicit mapping for {args.model_alias}. Using as path.")
-        path = args.model_alias
+    
+    if args.model_path:
+        path = args.model_path
+    else:
+        path = model_paths.get(args.model_alias)
+        if not path:
+            print(f"Warning: No explicit mapping for {args.model_alias}. Using as path.")
+            path = args.model_alias
     
     model_base = construct_model_base(path)
     model = model_base.model
@@ -238,5 +240,6 @@ if __name__ == "__main__":
     parser.add_argument("--model_alias", type=str, required=True, help="Model alias (e.g., Qwen3-VL-8B-Instruct)")
     parser.add_argument("--prompts_file", type=str, required=True, help="Path to text file with prompts")
     parser.add_argument("--image_file", type=str, default=None, help="Optional path to image file for VLM")
+    parser.add_argument("--model_path", type=str, default=None, help="Optional explicit model path (overrides alias mapping)")
     args = parser.parse_args()
     plot_cosine_similarity(args)
