@@ -8,9 +8,9 @@ pip install --upgrade pillow
 # Ensure latest transformers for FP8 support
 pip install --upgrade transformers accelerate
 
-# User requested FP8 model on H100
-MODEL_ALIAS="Qwen3-VL-32B-Instruct-FP8"
-MODEL_PATH="Qwen/Qwen3-VL-32B-Instruct-FP8"
+# Switching back to standard model (BF16) as FP8 vision encoder crashes
+MODEL_ALIAS="Qwen3-VL-32B-Instruct"
+MODEL_PATH="Qwen/Qwen3-VL-32B-Instruct"
 
 echo "Running paper experiment for $MODEL_ALIAS..."
 python run_paper_experiment.py --model_alias "$MODEL_ALIAS" --model_path "$MODEL_PATH"
