@@ -15,13 +15,13 @@ pip install -r requirements.txt
 # 1. Run Text-Only Experiment
 echo "Running Text-Only Experiment..."
 python plot_cosine_similarity.py \
-    --model_alias Qwen3-VL-32B-Instruct \
+    --model_alias Qwen3-VL-8B-Instruct \
     --prompts_file test_prompts.json
 
 # 2. Run Visual Experiment (Harmful)
 echo "Running Visual Experiment (Harmful)..."
 python plot_cosine_similarity.py \
-    --model_alias Qwen3-VL-32B-Instruct \
+    --model_alias Qwen3-VL-8B-Instruct \
     --prompts_file test_prompts_visual.json \
     --image_file drugs.png
 
@@ -29,7 +29,7 @@ python plot_cosine_similarity.py \
 echo "Running Visual Experiment (Benign)..."
 # Using test_prompts_visual_benign.json
 python plot_cosine_similarity.py \
-    --model_alias Qwen3-VL-32B-Instruct \
+    --model_alias Qwen3-VL-8B-Instruct \
     --prompts_file test_prompts_visual_benign.json \
     --image_file drugs.png
 
