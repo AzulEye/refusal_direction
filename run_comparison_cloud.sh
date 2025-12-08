@@ -35,11 +35,11 @@ python plot_cosine_similarity.py \
 
 # 4. Run Visual Experiment (Replacement Harmful)
 echo "Running Visual Experiment (Replacement Harmful)..."
-# Using test_prompts_visual_replacement.json + cats.png
+# Using test_prompts_visual_replacement.json + banana.png
 python plot_cosine_similarity.py \
     --model_alias Qwen3-VL-8B-Instruct \
     --prompts_file test_prompts_visual_replacement.json \
-    --image_file cats.png
+    --image_file banana.png
 
 # 5. Run Visual Experiment (Replacement Benign)
 echo "Running Visual Experiment (Replacement Benign)..."
