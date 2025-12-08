@@ -9,6 +9,9 @@ else
     echo "Warning: venv/bin/activate not found. Assuming environment is already set up or trying global python."
 fi
 
+# Install missing dependencies
+pip install -r requirements.txt
+
 # 1. Run Text-Only Experiment
 echo "Running Text-Only Experiment..."
 python plot_cosine_similarity.py \

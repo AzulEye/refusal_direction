@@ -16,3 +16,4 @@ jaxtyping
 transformers_stream_generator
 
 torchvision
+seaborn
