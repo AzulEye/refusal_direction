@@ -2,7 +2,12 @@
 set -e
 
 # Setup environment
-source venv/bin/activate
+# Check if venv exists
+if [ -f "venv/bin/activate" ]; then
+    source venv/bin/activate
+else
+    echo "Warning: venv/bin/activate not found. Assuming environment is already set up or trying global python."
+fi
 
 # 1. Run Text-Only Experiment
 echo "Running Text-Only Experiment..."
