@@ -3,6 +3,9 @@ import os
 import torch
 import random
 import numpy as np
+import random
+import numpy as np
+from dataset.load_dataset import load_dataset_split
 from pipeline.config import Config
 from pipeline.run_pipeline import (
     load_and_sample_datasets,
@@ -122,14 +125,18 @@ def run_paper_experiment(args):
     # D. Harmless Refusal Induction (Add)
     # Coeff = +1.0
     harmless_hooks = [(model_base.model_block_modules[layer], get_activation_addition_input_pre_hook(vector=refusal_dir, coeff=1.0))]
+
+    # Load harmless test set
+    harmless_test = random.sample(load_dataset_split(harmtype='harmless', split='test', instructions_only=True), cfg.n_test)
     
     print("Generating Harmless ActAdd (Add) Completions...")
     generate_and_save_completions_for_dataset(
         cfg, model_base, fwd_pre_hooks=harmless_hooks, fwd_hooks=[],
-        intervention_label="actadd", dataset_name="harmless"
+        intervention_label="actadd", dataset_name="harmless", dataset=harmless_test
     )
+    
     evaluate_completions_and_save_results_for_dataset(
-        cfg, intervention_label="actadd", dataset_name="alpaca",
+        cfg, intervention_label="actadd", dataset_name="harmless",
         eval_methodologies=["substring_matching"]
     )
     
