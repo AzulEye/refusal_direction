@@ -234,7 +234,7 @@ def plot_cosine_similarity(args):
         # Generate Response
         print("Generating response...")
         # use_cache=False to avoid incompatibility with newer transformers and custom Qwen model code
-        gen_out = model.generate(**inputs, max_new_tokens=512, do_sample=False, use_cache=False)
+        gen_out = model.generate(**inputs, max_new_tokens=50, do_sample=False, use_cache=False)
         # Decode only the new tokens
         new_tokens = gen_out[0][inputs.input_ids.shape[1]:]
         response_text = tokenizer.decode(new_tokens, skip_special_tokens=True)
