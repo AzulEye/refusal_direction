@@ -192,31 +192,51 @@ def plot_cosine_similarity(args):
         
         # Compute Cosine Similarity
         # Cache[layer]: (1, seq_len, d_model)
-        heatmap_data = np.zeros((n_layers, len(tokens)))
+        
+        # Identify non-image tokens
+        # Qwen-VL uses a specific token for image placeholders. Usually <|image_pad|> or similar.
+        # We can detect it via the specific ID usually used.
+        # Ideally we use the tokenizer to find it.
+        image_pad_id = tokenizer.convert_tokens_to_ids("<|image_pad|>")
+        if image_pad_id is None:
+             # Fallback to known ID if token not found by name (sometimes handled specially)
+             image_pad_id = 151655 
+        
+        # Create mask for valid tokens (not image pad)
+        input_ids = inputs.input_ids[0].cpu().numpy()
+        valid_indices = [i for i, tid in enumerate(input_ids) if tid != image_pad_id]
+        
+        # Filter tokens and heatmap dimensions
+        filtered_tokens = [tokens[i] for i in valid_indices]
+        heatmap_data = np.zeros((n_layers, len(valid_indices)))
         
         for layer in range(n_layers):
             acts = cache[layer][0].float() # (seq_len, d_model)
             acts = acts / acts.norm(dim=-1, keepdim=True)
             
-            sim = (acts @ direction).numpy()
+            # Select only valid activations
+            valid_acts = acts[valid_indices]
+            
+            sim = (valid_acts @ direction).numpy()
             heatmap_data[layer, :] = sim
             
         # Plot
         plt.figure(figsize=(20, 10))
         sns.heatmap(heatmap_data, cmap="RdBu_r", vmin=0, vmax=1, yticklabels=True) 
         
-        plt.xlabel("Token Position")
+        plt.xlabel("Token Position (Non-Image)")
         plt.ylabel("Layer")
         plt.title(f"Cosine Similarity with Refusal Direction\nPrompt: {prompt[:50]}...")
         
         # Set x-ticks to tokens (might be crowded)
-        if len(tokens) < 100:
-            plt.xticks(np.arange(len(tokens)) + 0.5, tokens, rotation=90, fontsize=8)
+        if len(filtered_tokens) < 100:
+            plt.xticks(np.arange(len(filtered_tokens)) + 0.5, filtered_tokens, rotation=90, fontsize=8)
         else:
-            step = len(tokens) // 20
-            plt.xticks(np.arange(0, len(tokens), step) + 0.5, [tokens[j] for j in range(0, len(tokens), step)], rotation=90)
+            step = max(1, len(filtered_tokens) // 20)
+            plt.xticks(np.arange(0, len(filtered_tokens), step) + 0.5, [filtered_tokens[j] for j in range(0, len(filtered_tokens), step)], rotation=90)
             
-        filename = f"{output_dir}/{args.model_alias}_prompt_{i}.png"
+        suffix = "visual" if pil_image else "text"
+        filename = f"{output_dir}/{args.model_alias}_{suffix}_prompt_{i}.png"
         plt.tight_layout()
         plt.savefig(filename)
         plt.close()
