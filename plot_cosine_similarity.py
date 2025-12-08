@@ -237,12 +237,11 @@ def plot_cosine_similarity(args):
         
         # Generate Response
         print("Generating response...")
+        from transformers import TextStreamer
+        streamer = TextStreamer(tokenizer, skip_prompt=True)
         # use_cache=False to avoid incompatibility with newer transformers and custom Qwen model code
-        gen_out = model.generate(**inputs, max_new_tokens=512, do_sample=False, use_cache=False)
-        # Decode only the new tokens
-        new_tokens = gen_out[0][inputs.input_ids.shape[1]:]
-        response_text = tokenizer.decode(new_tokens, skip_special_tokens=True)
-        print(f"Response: {response_text}\n" + "-"*50)
+        model.generate(**inputs, max_new_tokens=512, do_sample=False, use_cache=False, streamer=streamer)
+        print("-" * 50)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
