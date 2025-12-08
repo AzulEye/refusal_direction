@@ -222,7 +222,8 @@ def plot_cosine_similarity(args):
             
         # Plot
         plt.figure(figsize=(20, 10))
-        sns.heatmap(heatmap_data, cmap="RdBu_r", vmin=0, vmax=1, yticklabels=True) 
+        # User requested 0-0.6 range
+        sns.heatmap(heatmap_data, cmap="RdBu_r", vmin=0, vmax=0.6, yticklabels=True) 
         
         plt.xlabel("Token Position (Non-Image)")
         plt.ylabel("Layer")
