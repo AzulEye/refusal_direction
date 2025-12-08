@@ -219,13 +219,17 @@ def plot_cosine_similarity(args):
         
         plt.xlabel(f"Token Position (Last {len(tokens)})")
         plt.ylabel("Layer")
-        plt.title(f"Cosine Similarity with Refusal Direction\nPrompt: {prompt[:50]}...")
+        plt.xlabel(f"Token Position (Last {len(tokens)})")
+        plt.ylabel("Layer")
+        plt.title(f"Cosine Similarity with Refusal Direction ({args.model_alias})")
         
         # Set x-ticks to tokens (might be crowded)
         plt.xticks(np.arange(len(tokens)) + 0.5, tokens, rotation=90, fontsize=8)
             
-        suffix = "visual" if pil_image else "text"
-        filename = f"{output_dir}/{args.model_alias}_{suffix}_prompt_{i}.png"
+        # Filename using JSON basename
+        prompts_basename = os.path.splitext(os.path.basename(args.prompts_file))[0]
+        filename = f"{output_dir}/{args.model_alias}_{prompts_basename}_prompt_{i}.png"
+        
         plt.tight_layout()
         plt.savefig(filename)
         plt.close()
@@ -234,7 +238,7 @@ def plot_cosine_similarity(args):
         # Generate Response
         print("Generating response...")
         # use_cache=False to avoid incompatibility with newer transformers and custom Qwen model code
-        gen_out = model.generate(**inputs, max_new_tokens=50, do_sample=False, use_cache=False)
+        gen_out = model.generate(**inputs, max_new_tokens=100, do_sample=False, use_cache=False)
         # Decode only the new tokens
         new_tokens = gen_out[0][inputs.input_ids.shape[1]:]
         response_text = tokenizer.decode(new_tokens, skip_special_tokens=True)
