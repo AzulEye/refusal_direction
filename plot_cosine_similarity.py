@@ -1,3 +1,5 @@
+# python plot_cosine_similarity.py     --model_alias Qwen3-VL-8B-Instruct     --batch_dir /home/ubuntu/generated_harmbench/results     --replace_image_dir "/home/jdubinsk/MARS4-Gandelsman=/home/ubuntu/generated_harmbench"     --max_new_tokens 50 --max_images 3
+
 
 import os
 import torch
@@ -64,19 +66,10 @@ def get_activations_hook(layer, cache):
         cache[layer] = act.detach().cpu()
     return hook
 
-def plot_cosine_similarity(args):
+def load_resources(args):
     # 1. Load Model
     print(f"Loading model: {args.model_alias}")
-    # We use construct_model_base to handle Qwen3-VL specifics
-    # But we need to know the path. Assuming standard path or passed in args.
-    # If alias is passed, we might need mapping.
-    # For now, let's assume alias IS the path or we use the config map.
     
-    # If alias matches directory name, we try to deduce common HF paths or use mapping.
-    # User Run Directory: "qwen-1_8b-chat" -> HF: "Qwen/Qwen-1_8B-Chat"
-    # User Run Directory: "Qwen3-VL-8B-Instruct" -> HF: "Qwen/Qwen3-VL-8B-Instruct"
-    
-    # We can try to construct path from alias if not in map.
     model_paths = {
         "Qwen3-VL-8B-Instruct": "Qwen/Qwen3-VL-8B-Instruct",
         "Qwen-1.8B-Chat": "Qwen/Qwen-1_8B-Chat",
@@ -115,7 +108,10 @@ def plot_cosine_similarity(args):
     print(f"Loading direction from: {direction_path}")
     direction = torch.load(direction_path, map_location='cpu').float()
     direction = direction / direction.norm() # Ensure unit vector
-    
+
+    return model_base, model, tokenizer, direction
+
+def plot_cosine_similarity(args, model_base, model, tokenizer, direction):
     # 3. Load Prompts and Images
     experiments = [] # List of {'prompt': str, 'image_path': str, 'id': str}
 
@@ -398,6 +394,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     args = parser.parse_args()
     
+    # Load Model and Direction Once
+    model_base, model, tokenizer, direction = load_resources(args)
+
     if args.batch_dir:
         # Batch Mode
         import glob
@@ -442,7 +441,7 @@ if __name__ == "__main__":
             current_args.batch_dir = None # Prevent recursion
             
             try:
-                plot_cosine_similarity(current_args)
+                plot_cosine_similarity(current_args, model_base, model, tokenizer, direction)
             except Exception as e:
                 print(f"Error processing {aj}: {e}")
                 import traceback
@@ -450,4 +449,4 @@ if __name__ == "__main__":
 
     else:
         # Single Run Mode
-        plot_cosine_similarity(args)
+        plot_cosine_similarity(args, model_base, model, tokenizer, direction)
