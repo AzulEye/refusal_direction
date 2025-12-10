@@ -153,6 +153,8 @@ def plot_cosine_similarity(args):
              raise ValueError(f"Unsupported attack_type: {attack_type}")
 
         prompts = [prompt]
+        obj_name = attack_data.get('object', 'unknown_object')
+        
         # Extract images
         images = []
         if 'responses' in attack_data and len(attack_data['responses']) > 0 and 'images' in attack_data['responses'][0]:
@@ -176,7 +178,12 @@ def plot_cosine_similarity(args):
              experiments.append({
                  'prompt': prompt,
                  'image_path': img_path,
-                 'id': f"img_{idx}"
+                 'id': f"img_{idx}",
+                 'metadata': {
+                     'object': obj_name,
+                     'attack_type': attack_type,
+                     'replacement': replacement
+                 }
              })
              
     elif args.prompts_file:
@@ -300,7 +307,14 @@ def plot_cosine_similarity(args):
         plt.xticks(np.arange(len(tokens)) + 0.5, tokens, rotation=90, fontsize=8)
             
         # Filename generation
-        if args.attack_json:
+        if args.attack_json and 'metadata' in exp:
+             meta = exp['metadata']
+             obj = meta.get('object', 'obj')
+             atype = meta.get('attack_type', 'type')
+             repl = meta.get('replacement', 'repl')
+             filename = f"{output_dir}/{args.model_alias}_{obj}_{atype}_{repl}_{exp_id}.png"
+        elif args.attack_json:
+             # Fallback if metadata missing for some reason
              json_basename = os.path.splitext(os.path.basename(args.attack_json))[0]
              filename = f"{output_dir}/{args.model_alias}_{json_basename}_{exp_id}.png"
         else:
