@@ -165,6 +165,13 @@ def plot_cosine_similarity(args):
                        
         print(f"Found {len(images)} images in attack JSON.")
         
+        if args.replace_image_dir:
+            if '=' not in args.replace_image_dir:
+                 raise ValueError("--replace_image_dir must be in format 'OLD_DIR=NEW_DIR'")
+            old_dir, new_dir = args.replace_image_dir.split('=', 1)
+            print(f"Replacing image path prefix: '{old_dir}' -> '{new_dir}'")
+            images = [img.replace(old_dir, new_dir) for img in images]
+        
         for idx, img_path in enumerate(images):
              experiments.append({
                  'prompt': prompt,
@@ -318,6 +325,7 @@ if __name__ == "__main__":
     parser.add_argument("--model_alias", type=str, required=True, help="Model alias (e.g., Qwen3-VL-8B-Instruct)")
     parser.add_argument("--prompts_file", type=str, default=None, help="Path to text file with prompts")
     parser.add_argument("--attack_json", type=str, default=None, help="Path to HarmBench attack result JSON")
+    parser.add_argument("--replace_image_dir", type=str, default=None, help="Replace image directory prefix in format 'OLD=NEW'")
     parser.add_argument("--image_file", type=str, default=None, help="Optional path to image file for VLM")
     parser.add_argument("--model_path", type=str, default=None, help="Optional explicit model path (overrides alias mapping)")
     args = parser.parse_args()
