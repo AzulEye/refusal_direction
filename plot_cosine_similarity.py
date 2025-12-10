@@ -313,20 +313,100 @@ def plot_cosine_similarity(args):
         print(f"Saved {filename}")
         
         # Generate Response
+        # Generate Response
         print("Generating response...")
         from transformers import TextStreamer
         streamer = TextStreamer(tokenizer, skip_prompt=True)
         # use_cache=False to avoid incompatibility with newer transformers and custom Qwen model code
-        model.generate(**inputs, max_new_tokens=512, do_sample=False, use_cache=False, streamer=streamer)
-        print("-" * 50)
+        gen_out = model.generate(**inputs, max_new_tokens=512, do_sample=False, use_cache=False)
+        
+        # Decode only the new tokens for printing, but we also want to save it
+        new_tokens = gen_out[0][inputs.input_ids.shape[1]:]
+        response_text = tokenizer.decode(new_tokens, skip_special_tokens=True)
+        print(f"Response: {response_text}\n" + "-"*50)
+        
+        # Save results to JSON
+        json_filename = filename.replace('.png', '.json')
+        results_data = {
+            "experiment_id": exp_id,
+            "prompt": prompt,
+            "image_path": img_path,
+            "model_alias": args.model_alias,
+            "generated_response": response_text,
+            "cosine_similarity": {
+                "layer_avg": np.mean(heatmap_data, axis=1).tolist(), # Avg sim per layer
+                "token_avg": np.mean(heatmap_data, axis=0).tolist(), # Avg sim per token
+                "heatmap": heatmap_data.tolist(), # Full data
+                "tokens": tokens # The analyzed tokens
+            }
+        }
+        
+        with open(json_filename, 'w') as f:
+            json.dump(results_data, f, indent=2)
+        print(f"Saved data to {json_filename}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_alias", type=str, required=True, help="Model alias (e.g., Qwen3-VL-8B-Instruct)")
     parser.add_argument("--prompts_file", type=str, default=None, help="Path to text file with prompts")
     parser.add_argument("--attack_json", type=str, default=None, help="Path to HarmBench attack result JSON")
+    parser.add_argument("--batch_dir", type=str, default=None, help="Directory containing attack results for batch processing")
     parser.add_argument("--replace_image_dir", type=str, default=None, help="Replace image directory prefix in format 'OLD=NEW'")
     parser.add_argument("--image_file", type=str, default=None, help="Optional path to image file for VLM")
     parser.add_argument("--model_path", type=str, default=None, help="Optional explicit model path (overrides alias mapping)")
     args = parser.parse_args()
-    plot_cosine_similarity(args)
+    args = parser.parse_args()
+    
+    if args.batch_dir:
+        # Batch Mode
+        import glob
+        
+        print(f"Running in Batch Mode on: {args.batch_dir}")
+        attack_jsons = []
+        
+        # We need to find: 
+        # 1. replace_with_object/{replacement}/*.json (take one)
+        # 2. naive_attack/*.json (take one)
+        
+        # Traverse recursively
+        for root, dirs, files in os.walk(args.batch_dir):
+            if 'replace_with_object' in os.path.basename(root):
+                # We are in .../replace_with_object/
+                # Look at subdirectories (banana, etc.)
+                for d in dirs:
+                    subdir = os.path.join(root, d)
+                    jsons = glob.glob(os.path.join(subdir, "*.json"))
+                    if jsons:
+                        attack_jsons.append(jsons[0]) # Take first
+                        
+            elif 'naive_attack' in os.path.basename(root):
+                # We are in .../naive_attack/
+                # Just take first json here
+                jsons = glob.glob(os.path.join(root, "*.json"))
+                if jsons:
+                    attack_jsons.append(jsons[0])
+                    
+        print(f"Found {len(attack_jsons)} unique attack scenarios to process.")
+        
+        for aj in attack_jsons:
+            print(f"Processing Batch Item: {aj}")
+            # Mutate args to run single instance logic
+            # (A bit hacky but avoids deep refactor for now, though refactoring is cleaner)
+            # Let's call the main function with modified args
+            
+            # Create a namespace copy or new object
+            current_args = argparse.Namespace(**vars(args))
+            current_args.attack_json = aj
+            current_args.prompts_file = None
+            current_args.batch_dir = None # Prevent recursion
+            
+            try:
+                plot_cosine_similarity(current_args)
+            except Exception as e:
+                print(f"Error processing {aj}: {e}")
+                import traceback
+                traceback.print_exc()
+
+    else:
+        # Single Run Mode
+        plot_cosine_similarity(args)
