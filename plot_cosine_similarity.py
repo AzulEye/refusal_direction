@@ -248,7 +248,21 @@ def plot_cosine_similarity(args):
                      raise FileNotFoundError(f"Image file not found: {img_path}")
                 
                 img = Image.open(img_path).convert("RGB")
-                print(f"Loaded image: {img_path} (Size: {img.size})")
+                
+                # Resize so smaller side is 512
+                # Calculate new size
+                width, height = img.size
+                if min(width, height) != 512:
+                    if width < height:
+                        new_width = 512
+                        new_height = int(height * (512 / width))
+                    else:
+                        new_height = 512
+                        new_width = int(width * (512 / height))
+                    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                    print(f"Resized image to: {img.size}")
+                
+                print(f"Loaded image: {img_path} (Final Size: {img.size})")
                 pil_images.append(img)
         
         # Use model_base abstraction
