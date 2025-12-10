@@ -174,6 +174,11 @@ def plot_cosine_similarity(args):
             print(f"Replacing image path prefix: '{old_dir}' -> '{new_dir}'")
             images = [img.replace(old_dir, new_dir) for img in images]
         
+        # Apply max_images limit
+        if args.max_images is not None and len(images) > args.max_images:
+             print(f"Limiting images from {len(images)} to {args.max_images}")
+             images = images[:args.max_images]
+        
         # User requested to run all images AT ONCE with the text prompt.
         # So we aggregate them into one experiment entry.
         experiments.append({
@@ -389,6 +394,7 @@ if __name__ == "__main__":
     parser.add_argument("--image_file", type=str, default=None, help="Optional path to image file for VLM")
     parser.add_argument("--model_path", type=str, default=None, help="Optional explicit model path (overrides alias mapping)")
     parser.add_argument("--max_new_tokens", type=int, default=512, help="Maximum number of new tokens to generate")
+    parser.add_argument("--max_images", type=int, default=None, help="Maximum number of images to process (takes first N)")
     args = parser.parse_args()
     args = parser.parse_args()
     
