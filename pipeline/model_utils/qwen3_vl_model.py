@@ -116,36 +116,52 @@ class Qwen3VLModel(ModelBase):
              
              # Construct Chat Template for EACH instruction
              texts = []
-             for instr in instructions:
-                 # Construct valid Qwen3-VL message
-                 # Using the <|image_pad|> placeholder logic or official chat template?
-                 # Official: content=[{'type': 'image', 'image': ...}, {'type': 'text', 'text': ...}]
-                 # But we don't have the image path here easily if passing PIL objects to apply_chat_template?
-                 # Actually apply_chat_template expects paths or base64 usually if 'image' key is used.
-                 # BUT, we can just construct the raw text prompt manually if we know the special tokens.
-                 # Qwen3-VL usually uses <|vision_start|><|image_pad|>...<|vision_end|>
-                 # Let's rely on the tokenizer's chat template if possible.
+             # If we have 1 instruction and multiple images, we assign all images to that instruction.
+             # If we have N instructions and N images, we assign 1 image per instruction.
+             # If we have N instructions and M images (M != N, M != 1), it's ambiguous, but let's assume all images for ALL instructions? No, that's heavy.
+             # Let's handle the specific case requested: 1 instruction, N images.
+             
+             for i, instr in enumerate(instructions):
+                 content = []
                  
+                 # Determine how many images go into this instruction
+                 # If only 1 instruction, take all images
+                 if len(instructions) == 1:
+                     # images can be single item or list
+                     if isinstance(images, list):
+                         imgs_for_this = images
+                     else:
+                         imgs_for_this = [images]
+                 else:
+                     # 1-to-1 mapping assumption fallback
+                     if isinstance(images, list) and len(images) == len(instructions):
+                         imgs_for_this = [images[i]]
+                     else:
+                         # Fallback: ignore images or use all? Safe fallback is 1 placeholder if we don't know?
+                         # Or usually 1 image per prompt.
+                         imgs_for_this = [images] if not isinstance(images, list) else images 
+                         # This logic is fuzzy for N:M, but precise for 1:N.
+                 
+                 # Add placeholders
+                 for _ in imgs_for_this:
+                     content.append({"type": "image"})
+                 
+                 content.append({"type": "text", "text": instr})
+
                  messages = [
                      {
                          "role": "user", 
-                         "content": [
-                             {"type": "image"}, # Placeholder for processor to fill?
-                             {"type": "text", "text": instr}
-                         ]
+                         "content": content
                      }
                  ]
-                 # We need to format this using apply_chat_template
                  text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
                  texts.append(text)
              
-             # Process with images
-             # If images is a single image, repeat it?
+             # processor expects 'images' as list of images
+             # If images is not a list, make it one.
              if not isinstance(images, list):
-                 images = [images] * len(instructions)
+                 images = [images]
                  
-             # processor expects 'images' as list of images (one per prompt? or mixed?)
-             # standard: processor(text=texts, images=images, ...)
              return self.processor(text=texts, images=images, padding=True, return_tensors="pt")
         
         # Text only fallback

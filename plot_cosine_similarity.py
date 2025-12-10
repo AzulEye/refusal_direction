@@ -174,17 +174,18 @@ def plot_cosine_similarity(args):
             print(f"Replacing image path prefix: '{old_dir}' -> '{new_dir}'")
             images = [img.replace(old_dir, new_dir) for img in images]
         
-        for idx, img_path in enumerate(images):
-             experiments.append({
-                 'prompt': prompt,
-                 'image_path': img_path,
-                 'id': f"img_{idx}",
-                 'metadata': {
-                     'object': obj_name,
-                     'attack_type': attack_type,
-                     'replacement': replacement
-                 }
-             })
+        # User requested to run all images AT ONCE with the text prompt.
+        # So we aggregate them into one experiment entry.
+        experiments.append({
+             'prompt': prompt,
+             'image_paths': images, # List of paths
+             'id': "multi_image_set",
+             'metadata': {
+                 'object': obj_name,
+                 'attack_type': attack_type,
+                 'replacement': replacement
+             }
+        })
              
     elif args.prompts_file:
         if args.prompts_file.endswith('.json'):
@@ -210,9 +211,11 @@ def plot_cosine_similarity(args):
                 prompts = [line.strip() for line in f if line.strip()]
         
         for idx, prompt in enumerate(prompts):
+             # Ensure image_paths is a list even for single image arg
+             paths = [args.image_file] if args.image_file else []
              experiments.append({
                  'prompt': prompt,
-                 'image_path': args.image_file,
+                 'image_paths': paths, 
                  'id': f"prompt_{idx}"
              })
     else:
@@ -230,21 +233,23 @@ def plot_cosine_similarity(args):
     
     for i, exp in enumerate(experiments):
         prompt = exp['prompt']
-        img_path = exp['image_path']
+        img_paths = exp['image_paths'] # List
         exp_id = exp['id']
         
         print(f"Processing experiment {i+1}/{len(experiments)} ({exp_id})...")
         print(f"Prompt: {prompt[:30]}...")
 
-        # Pre-load image if provided
-        pil_image = None
-        if img_path:
-            print(f"Loading image from {img_path}")
-            if not os.path.exists(img_path):
-                 raise FileNotFoundError(f"Image file not found: {img_path}")
-            
-            pil_image = Image.open(img_path).convert("RGB")
-            print(f"Loaded image: {img_path} (Size: {pil_image.size})")
+        # Pre-load images
+        pil_images = []
+        if img_paths:
+            for img_path in img_paths:
+                print(f"Loading image from {img_path}")
+                if not os.path.exists(img_path):
+                     raise FileNotFoundError(f"Image file not found: {img_path}")
+                
+                img = Image.open(img_path).convert("RGB")
+                print(f"Loaded image: {img_path} (Size: {img.size})")
+                pil_images.append(img)
         
         # Use model_base abstraction
         # If image is provided, we need to bypass the partial or pass kwargs if supported.
@@ -252,8 +257,9 @@ def plot_cosine_similarity(args):
         # But Qwen3VLModel.tokenize_instructions accepts images.
         # We can try calling the partial with `images=...`
         
-        if pil_image:
-            inputs = model_base.tokenize_instructions_fn(instructions=[prompt], images=pil_image)
+        if pil_images:
+            # Pass list of images
+            inputs = model_base.tokenize_instructions_fn(instructions=[prompt], images=pil_images)
         else:
             inputs = model_base.tokenize_instructions_fn(instructions=[prompt])
             
@@ -344,7 +350,7 @@ def plot_cosine_similarity(args):
         results_data = {
             "experiment_id": exp_id,
             "prompt": prompt,
-            "image_path": img_path,
+            "image_paths": img_paths,
             "model_alias": args.model_alias,
             "generated_response": response_text,
             "cosine_similarity": {
