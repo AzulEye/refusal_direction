@@ -318,7 +318,7 @@ def plot_cosine_similarity(args):
         from transformers import TextStreamer
         streamer = TextStreamer(tokenizer, skip_prompt=True)
         # use_cache=False to avoid incompatibility with newer transformers and custom Qwen model code
-        gen_out = model.generate(**inputs, max_new_tokens=512, do_sample=False, use_cache=False)
+        gen_out = model.generate(**inputs, max_new_tokens=args.max_new_tokens, do_sample=False, use_cache=False)
         
         # Decode only the new tokens for printing, but we also want to save it
         new_tokens = gen_out[0][inputs.input_ids.shape[1]:]
@@ -354,6 +354,7 @@ if __name__ == "__main__":
     parser.add_argument("--replace_image_dir", type=str, default=None, help="Replace image directory prefix in format 'OLD=NEW'")
     parser.add_argument("--image_file", type=str, default=None, help="Optional path to image file for VLM")
     parser.add_argument("--model_path", type=str, default=None, help="Optional explicit model path (overrides alias mapping)")
+    parser.add_argument("--max_new_tokens", type=int, default=512, help="Maximum number of new tokens to generate")
     args = parser.parse_args()
     args = parser.parse_args()
     
