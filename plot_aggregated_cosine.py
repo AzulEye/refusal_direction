@@ -53,10 +53,8 @@ def load_data(results_dir):
             
             # Take last 3 tokens
             if heatmap.shape[1] >= 3:
-                last_3 = heatmap[:, -3:]
-                # Mean over tokens
-                vec = np.mean(last_3, axis=1) # (n_layers,)
-                data[model][attack_type].append(vec)
+                last_3 = heatmap[:, -3:] # (n_layers, 3)
+                data[model][attack_type].append(last_3)
             else:
                 print(f"Skipping {f}: Not enough tokens ({heatmap.shape[1]})")
                 
@@ -65,7 +63,7 @@ def load_data(results_dir):
             
     return data
 
-def plot_aggregated(data, output_dir):
+def plot_aggregated(data, output_dir, metric="mean"):
     os.makedirs(output_dir, exist_ok=True)
     
     # Style settings to match paper
@@ -81,8 +79,6 @@ def plot_aggregated(data, output_dir):
     colors = {
         "naive_attack": "blue",
         "replace_with_object": "orange" 
-        # Paper uses Blue for "harmful" (naive) and Orange for "variable" (random suffix).
-        # Replacement is a variation, so Orange fits.
     }
     
     labels = {
@@ -95,17 +91,31 @@ def plot_aggregated(data, output_dir):
         
         has_data = False
         
-        for attack_type, vectors in attack_data.items():
-            if not vectors:
+        for attack_type, arrays in attack_data.items():
+            if not arrays:
                 continue
                 
-            has_data = True
-            arr = np.array(vectors) # (N, n_layers)
-            n_samples = arr.shape[0]
+            # arrays: list of (n_layers, 3)
+            # Stack them: (N, n_layers, 3)
+            stacked = np.array(arrays)
             
-            mean_vec = np.mean(arr, axis=0)
-            std_vec = np.std(arr, axis=0) # Standard Deviation
-            sem_vec = std_vec / np.sqrt(n_samples) # Standard Error
+            # Aggregate over the last dimension (tokens) first
+            if metric == "mean":
+                # Average over the last 3 tokens for each sample
+                sample_vecs = np.mean(stacked, axis=2) # (N, n_layers)
+            elif metric == "max":
+                # Max over the last 3 tokens for each sample
+                sample_vecs = np.max(stacked, axis=2) # (N, n_layers)
+            else:
+                raise ValueError(f"Unknown metric: {metric}")
+            
+            has_data = True
+            n_samples = sample_vecs.shape[0]
+            
+            # Now compute statistics over samples (N)
+            mean_vec = np.mean(sample_vecs, axis=0) # (n_layers,)
+            std_vec = np.std(sample_vecs, axis=0)
+            sem_vec = std_vec / np.sqrt(n_samples)
             
             # 95% Confidence Interval
             ci = 1.96 * sem_vec
@@ -120,19 +130,16 @@ def plot_aggregated(data, output_dir):
             plt.fill_between(layers, mean_vec - ci, mean_vec + ci, color=color, alpha=0.2)
             
         if has_data:
-            plt.title(f"Cosine Similarity vs Layer ({model})")
+            metric_title = "Average" if metric == "mean" else "Max"
+            plt.title(f"Cosine Similarity ({metric_title} last 3 tokens) - {model}")
             plt.xlabel("Layer")
             plt.ylabel("Cosine similarity with refusal direction")
             plt.legend()
             
-            # Limit Y axis to reasonable range if needed, e.g., similar to paper 0 to 0.6
-            # But let's let autoscaling handle it unless it's weird.
-            # Paper goes -0.05 to 0.55
-            
-            outfile = os.path.join(output_dir, f"aggregated_cosine_{model}.png")
+            outfile = os.path.join(output_dir, f"aggregated_cosine_{metric}_{model}.png")
             plt.tight_layout()
             plt.savefig(outfile, dpi=300)
-            print(f"Saved plot to {outfile}")
+            print(f"Saved {metric} plot to {outfile}")
             plt.close()
         else:
             print(f"No valid data to plot for {model}")
@@ -145,4 +152,9 @@ if __name__ == "__main__":
     
     print(f"Reading results from: {args.results_dir}")
     data = load_data(args.results_dir)
-    plot_aggregated(data, args.output_dir)
+    
+    print("Generating MEAN plots...")
+    plot_aggregated(data, args.output_dir, metric="mean")
+    
+    print("Generating MAX plots...")
+    plot_aggregated(data, args.output_dir, metric="max")
