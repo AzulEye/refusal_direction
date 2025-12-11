@@ -23,7 +23,7 @@ def parse_model_and_type(filename):
         attack_type = "naive_attack"
     elif "_replace_with_object_" in basename:
         attack_type = "replace_with_object"
-    elif "_text_harmful_" in basename:
+    elif "_text_harmful" in basename:
         attack_type = "text_harmful"
     elif "_text_replacement_" in basename:
         attack_type = "text_replacement"

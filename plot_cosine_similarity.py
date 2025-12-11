@@ -427,7 +427,7 @@ if __name__ == "__main__":
                     attack_jsons.append(jsons[0])
         
         # Also look for Text attacks in the batch_dir (flat or structured)
-        text_harmful = glob.glob(os.path.join(args.batch_dir, "*_text_harmful_*.json"))
+        text_harmful = glob.glob(os.path.join(args.batch_dir, "*_text_harmful*.json")) # relaxed from _text_harmful_*.json
         text_replace = glob.glob(os.path.join(args.batch_dir, "*_text_replacement_*.json"))
         attack_jsons.extend(text_harmful)
         attack_jsons.extend(text_replace)
