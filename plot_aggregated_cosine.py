@@ -23,6 +23,10 @@ def parse_model_and_type(filename):
         attack_type = "naive_attack"
     elif "_replace_with_object_" in basename:
         attack_type = "replace_with_object"
+    elif "_text_harmful_" in basename:
+        attack_type = "text_harmful"
+    elif "_text_replacement_" in basename:
+        attack_type = "text_replacement"
     else:
         return model, "unknown"
         
@@ -36,7 +40,7 @@ def load_data(results_dir):
     
     for f in files:
         model, attack_type = parse_model_and_type(f)
-        if not model or not attack_type:
+        if not model or not attack_type or attack_type == 'unknown':
             continue
             
         if model not in data:
@@ -78,12 +82,16 @@ def plot_aggregated(data, output_dir, metric="mean"):
     
     colors = {
         "naive_attack": "blue",
-        "replace_with_object": "orange" 
+        "replace_with_object": "orange",
+        "text_harmful": "red",
+        "text_replacement": "green"
     }
     
     labels = {
         "naive_attack": "Naive Attack",
-        "replace_with_object": "Replacement Attack"
+        "replace_with_object": "Replacement Attack",
+        "text_harmful": "Harmful (Text)",
+        "text_replacement": "Replacement (Text)"
     }
 
     for model, attack_data in data.items():
