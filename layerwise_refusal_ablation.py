@@ -214,7 +214,7 @@ def run_ablation_sweep(model, processor, model_base, direction, behaviors,
             )
 
         n_refusals = 0
-        n_harmful = 0
+        n_comply = 0
         n_total = 0
         per_beh_results = []
 
