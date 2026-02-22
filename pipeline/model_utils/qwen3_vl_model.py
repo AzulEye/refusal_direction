@@ -67,12 +67,17 @@ class Qwen3VLModel(ModelBase):
             import transformers
             raise ImportError(f"Could not import Qwen3VLForConditionalGeneration. Transformers version: {transformers.__version__}. Error: {e}")
         
-        model = Qwen3VLForConditionalGeneration.from_pretrained(
-            model_path,
+        kwargs = dict(
             torch_dtype=dtype,
-            device_map="auto"
-            # trust_remote_code might be needed or not, depends on HF version. 4.57+ has it.
-         ).eval()
+            device_map="auto",
+        )
+        # Use Flash Attention 2 on CUDA for ~2-3x faster generation
+        if torch.cuda.is_available():
+            kwargs["attn_implementation"] = "flash_attention_2"
+
+        model = Qwen3VLForConditionalGeneration.from_pretrained(
+            model_path, **kwargs
+        ).eval()
         model.requires_grad_(False)
         return model
 

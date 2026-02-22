@@ -256,32 +256,40 @@ def run_ablation_sweep(model, processor, model_base, direction, behaviors,
             n_total += 1
 
             # Inline guard judging
-            guard_harmful = False
+            guard_comply = False  # True = actual harmful compliance (jailbreak)
             if guard_classifier and not refused:
                 classifications = guard_classifier.classify_responses(
                     prompts=[bid], responses=[response]
                 )
-                guard_harmful = classifications[0]
-                n_harmful += int(guard_harmful)
+                guard_comply = classifications[0]
+                n_comply += int(guard_comply)
 
             per_beh_results.append({
                 "behavior_id": bid,
                 "refused": refused,
-                "guard_harmful": guard_harmful,
+                "guard_comply": guard_comply,
                 "response": response,
                 "response_preview": response[:200],
             })
 
             if verbose:
-                tag = "REFUSE" if refused else ("HARMFUL" if guard_harmful else "COMPLY")
+                if refused:
+                    tag = "REFUSE"
+                elif guard_classifier and guard_comply:
+                    tag = "COMPLY"
+                elif guard_classifier and not guard_comply:
+                    tag = "MISUNDERSTAND"
+                else:
+                    tag = "COMPLY"  # no guard, assume comply
                 print(f"    [{tag}] {bid}: {response[:300]}")
 
             # Free image memory
             del images
 
         refusal_rate = n_refusals / n_total if n_total > 0 else 0.0
-        n_comply = n_total - n_refusals
-        asr = n_harmful / n_total if n_total > 0 else 0.0
+        n_not_refused = n_total - n_refusals
+        n_misunderstand = n_not_refused - n_comply
+        asr = n_comply / n_total if n_total > 0 else 0.0
 
         sweep_entry = {
             "K": K,
@@ -291,8 +299,8 @@ def run_ablation_sweep(model, processor, model_base, direction, behaviors,
             "n_total": n_total,
         }
         if judge:
-            sweep_entry["n_harmful"] = n_harmful
             sweep_entry["n_comply"] = n_comply
+            sweep_entry["n_misunderstand"] = n_misunderstand
             sweep_entry["asr"] = asr
 
         results["sweep"].append(sweep_entry)
@@ -301,7 +309,7 @@ def run_ablation_sweep(model, processor, model_base, direction, behaviors,
         layer_desc = "baseline (no ablation)" if K == -1 else f"layers [0..{K}]"
         line = f"  K={K:3d} ({layer_desc}): refusal rate = {refusal_rate:.1%}  ({n_refusals}/{n_total})"
         if judge:
-            line += f"  ASR = {asr:.1%} ({n_harmful} harmful)"
+            line += f"  ASR = {asr:.1%} ({n_comply} comply, {n_misunderstand} misunderstand)"
         print(line)
 
         # Clear caches
