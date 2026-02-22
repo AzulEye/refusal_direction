@@ -264,23 +264,29 @@ def run_ablation_sweep(model, processor, model_base, direction, behaviors,
                 guard_comply = classifications[0]
                 n_comply += int(guard_comply)
 
+            # Classification tag
+            if refused:
+                tag = "REFUSE"
+            elif guard_classifier and guard_comply:
+                tag = "COMPLY"
+            elif guard_classifier and not guard_comply:
+                tag = "MISUNDERSTAND"
+            else:
+                tag = "COMPLY"  # no guard, assume comply
+
             per_beh_results.append({
                 "behavior_id": bid,
+                "classification": tag,
                 "refused": refused,
                 "guard_comply": guard_comply,
+                "prompt_used": prompt,
+                "slot_values": beh.get("slot_values", {}),
+                "image_paths": beh.get("image_paths", []),
                 "response": response,
                 "response_preview": response[:200],
             })
 
             if verbose:
-                if refused:
-                    tag = "REFUSE"
-                elif guard_classifier and guard_comply:
-                    tag = "COMPLY"
-                elif guard_classifier and not guard_comply:
-                    tag = "MISUNDERSTAND"
-                else:
-                    tag = "COMPLY"  # no guard, assume comply
                 print(f"    [{tag}] {bid}: {response[:300]}")
 
             # Free image memory
