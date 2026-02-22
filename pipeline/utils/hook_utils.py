@@ -112,6 +112,21 @@ def get_directional_patching_input_pre_hook(direction: Float[Tensor, "d_model"],
             return activation
     return hook_fn
 
+def get_layerwise_direction_ablation_hooks(
+    model_base,
+    direction: Float[Tensor, 'd_model'],
+    max_layer: int,
+):
+    """
+    Create ablation hooks for layers [0..max_layer] (inclusive).
+    Unlike get_all_direction_ablation_hooks, this only ablates up to max_layer.
+    """
+    fwd_pre_hooks = [(model_base.model_block_modules[layer], get_direction_ablation_input_pre_hook(direction=direction)) for layer in range(max_layer + 1)]
+    fwd_hooks = [(model_base.model_attn_modules[layer], get_direction_ablation_output_hook(direction=direction)) for layer in range(max_layer + 1)]
+    fwd_hooks += [(model_base.model_mlp_modules[layer], get_direction_ablation_output_hook(direction=direction)) for layer in range(max_layer + 1)]
+
+    return fwd_pre_hooks, fwd_hooks
+
 def get_activation_addition_input_pre_hook(vector: Float[Tensor, "d_model"], coeff: Float[Tensor, ""]):
     def hook_fn(module, input):
         nonlocal vector
