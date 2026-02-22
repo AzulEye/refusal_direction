@@ -152,7 +152,7 @@ def generate_with_hooks(model, processor, prompt, images, fwd_pre_hooks, fwd_hoo
 
 def run_ablation_sweep(model, processor, model_base, direction, behaviors,
                        output_dir, device, max_new_tokens=64, max_image_size=256,
-                       verbose=False):
+                       verbose=False, layer_range=None):
     """
     For K = 0..n_layers-1, ablate the refusal direction from layers [0..K],
     generate responses, and compute refusal rate.
@@ -166,8 +166,15 @@ def run_ablation_sweep(model, processor, model_base, direction, behaviors,
     else:
         n_layers = model.config.num_hidden_layers
 
-    # Also run baseline (no ablation)
-    sweep_points = list(range(-1, n_layers))  # -1 = no ablation
+    # Build sweep points: baseline (-1) + layer range
+    if layer_range:
+        start_k, end_k = layer_range
+        end_k = min(end_k, n_layers - 1)
+        sweep_points = [-1] + list(range(start_k, end_k + 1))
+        print(f"  Sweeping K = {start_k}..{end_k} ({end_k - start_k + 1} layers) + baseline")
+    else:
+        sweep_points = list(range(-1, n_layers))  # -1 = no ablation
+        print(f"  Sweeping all {n_layers} layers + baseline")
 
     results = {
         "n_layers": n_layers,
@@ -396,6 +403,8 @@ def main():
                         help="Print full response for each behavior at each K")
     parser.add_argument("--judge", action="store_true",
                         help="Run Qwen3Guard on non-refusal responses to check if harmful")
+    parser.add_argument("--layer_range", type=int, nargs=2, default=None, metavar=("START", "END"),
+                        help="Only sweep layers START..END (e.g. --layer_range 0 20)")
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--attention_json", type=str, default=None,
                         help="Path to attention_curve.json from Part 1 (auto-detected if not set)")
@@ -444,6 +453,7 @@ def main():
         model, processor, model_base, direction, behaviors,
         args.output_dir, device, max_new_tokens=args.max_new_tokens,
         max_image_size=args.max_image_size, verbose=args.verbose,
+        layer_range=args.layer_range,
     )
 
     # Judge with Qwen3Guard
