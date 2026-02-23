@@ -162,6 +162,67 @@ def generate_with_hooks(model, processor, prompt, images, fwd_pre_hooks, fwd_hoo
     return response
 
 
+def generate_batch_with_hooks(model, processor, prompts, images_list, fwd_pre_hooks, fwd_hooks,
+                              max_new_tokens=64, device=None):
+    """
+    Batched generation: process multiple prompts+images in one forward pass.
+    prompts: list of prompt strings
+    images_list: list of lists of PIL images (one list per prompt)
+    Returns list of decoded response strings.
+    """
+    from pipeline.utils.hook_utils import add_hooks
+
+    # Build chat inputs for each prompt
+    texts = []
+    all_images = []  # flat list of all images for the processor
+    for prompt, images in zip(prompts, images_list):
+        content = [{"type": "image"} for _ in images]
+        content.append({"type": "text", "text": prompt})
+        messages = [{"role": "user", "content": content}]
+        text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        texts.append(text)
+        all_images.extend(images)
+
+    inputs = processor(text=texts, images=all_images, padding=True, return_tensors="pt")
+
+    # Move to device
+    if device is None:
+        device = next(model.parameters()).device
+    inputs = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
+
+    with torch.no_grad():
+        with add_hooks(module_forward_pre_hooks=fwd_pre_hooks, module_forward_hooks=fwd_hooks):
+            gen_ids = model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
+            )
+
+    # Decode each response (handle padding: each sequence may have different input length)
+    responses = []
+    pad_token_id = processor.tokenizer.pad_token_id
+    for i in range(len(prompts)):
+        # Find where non-padding input ends for this sequence
+        input_ids_i = inputs["input_ids"][i]
+        # Count non-pad tokens in input
+        input_len = (input_ids_i != pad_token_id).sum().item()
+        # The generated sequence for this batch item
+        gen_i = gen_ids[i]
+        # Skip padding at the start + input tokens
+        # With left-padding, pad tokens are at the start
+        total_len = gen_i.shape[0]
+        pad_len = total_len - input_len - (total_len - inputs["input_ids"].shape[1])  # rough
+        # Simpler: just find first non-pad in gen_ids, then skip input_len tokens
+        non_pad_start = (gen_i != pad_token_id).nonzero(as_tuple=True)[0][0].item()
+        response_start = non_pad_start + input_len
+        response_ids = gen_i[response_start:]
+        # Remove any trailing pad/eos
+        response = processor.tokenizer.decode(response_ids, skip_special_tokens=True).strip()
+        responses.append(response)
+
+    return responses
+
+
 # ── Main sweep ───────────────────────────────────────────────────────────────
 
 def run_ablation_sweep(model, processor, model_base, direction, behaviors,
@@ -223,8 +284,10 @@ def run_ablation_sweep(model, processor, model_base, direction, behaviors,
         n_total = 0
         per_beh_results = []
 
+        # ── Prepare all prompts and images for this K ──
+        all_prompts = []
+        all_images_list = []
         for beh in behaviors:
-            bid = beh["behavior_id"]
             raw_prompt = beh["neutralized_prompt"]
 
             # Build CoT decode prompt with image-to-slot mapping
@@ -245,26 +308,54 @@ def run_ablation_sweep(model, processor, model_base, direction, behaviors,
             else:
                 prompt = raw_prompt
 
+            all_prompts.append(prompt)
+
             images = []
             for p in beh["image_paths"]:
                 img = Image.open(p).convert("RGB")
                 if max_image_size:
                     img.thumbnail((max_image_size, max_image_size), Image.LANCZOS)
                 images.append(img)
+            all_images_list.append(images)
 
-            response = generate_with_hooks(
-                model, processor, prompt, images,
-                fwd_pre_hooks, fwd_hooks,
-                max_new_tokens=max_new_tokens,
-                device=device,
-            )
+        # ── Generate: batched on CUDA, sequential otherwise ──
+        use_batch = (device.type == "cuda" and len(behaviors) > 1)
 
+        if use_batch:
+            try:
+                responses = generate_batch_with_hooks(
+                    model, processor, all_prompts, all_images_list,
+                    fwd_pre_hooks, fwd_hooks,
+                    max_new_tokens=max_new_tokens,
+                    device=device,
+                )
+            except Exception as e:
+                print(f"    Batch generation failed ({e}), falling back to sequential")
+                use_batch = False
+
+        if not use_batch:
+            responses = []
+            for prompt, images in zip(all_prompts, all_images_list):
+                r = generate_with_hooks(
+                    model, processor, prompt, images,
+                    fwd_pre_hooks, fwd_hooks,
+                    max_new_tokens=max_new_tokens,
+                    device=device,
+                )
+                responses.append(r)
+
+        # Free all images
+        del all_images_list
+
+        # ── Classify responses ──
+        for beh, prompt, response in zip(behaviors, all_prompts, responses):
+            bid = beh["behavior_id"]
             refused = is_refusal(response)
             n_refusals += int(refused)
             n_total += 1
 
             # Inline guard judging
-            guard_comply = False  # True = actual harmful compliance (jailbreak)
+            guard_comply = False
             if guard_classifier and not refused:
                 classifications = guard_classifier.classify_responses(
                     prompts=[bid], responses=[response]
@@ -296,9 +387,6 @@ def run_ablation_sweep(model, processor, model_base, direction, behaviors,
 
             if verbose:
                 print(f"    [{tag}] {bid}: {response[:300]}")
-
-            # Free image memory
-            del images
 
         refusal_rate = n_refusals / n_total if n_total > 0 else 0.0
         n_not_refused = n_total - n_refusals
