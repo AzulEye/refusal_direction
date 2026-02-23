@@ -228,7 +228,7 @@ def generate_batch_with_hooks(model, processor, prompts, images_list, fwd_pre_ho
 def run_ablation_sweep(model, processor, model_base, direction, behaviors,
                        output_dir, device, max_new_tokens=64, max_image_size=256,
                        verbose=False, layer_range=None, judge=False,
-                       decode_prompt=True):
+                       decode_prompt=True, batch_size=8):
     """
     For K = 0..n_layers-1, ablate the refusal direction from layers [0..K],
     generate responses, and compute refusal rate.
@@ -319,22 +319,34 @@ def run_ablation_sweep(model, processor, model_base, direction, behaviors,
             all_images_list.append(images)
 
         # ── Generate: batched on CUDA, sequential otherwise ──
-        use_batch = (device.type == "cuda" and len(behaviors) > 1)
+        use_batch = (device.type == "cuda" and batch_size > 1)
+        responses = []
 
         if use_batch:
-            try:
-                responses = generate_batch_with_hooks(
-                    model, processor, all_prompts, all_images_list,
-                    fwd_pre_hooks, fwd_hooks,
-                    max_new_tokens=max_new_tokens,
-                    device=device,
-                )
-            except Exception as e:
-                print(f"    Batch generation failed ({e}), falling back to sequential")
-                use_batch = False
-
-        if not use_batch:
-            responses = []
+            # Process in mini-batches
+            for batch_start in range(0, len(all_prompts), batch_size):
+                batch_end = min(batch_start + batch_size, len(all_prompts))
+                batch_prompts = all_prompts[batch_start:batch_end]
+                batch_images = all_images_list[batch_start:batch_end]
+                try:
+                    batch_responses = generate_batch_with_hooks(
+                        model, processor, batch_prompts, batch_images,
+                        fwd_pre_hooks, fwd_hooks,
+                        max_new_tokens=max_new_tokens,
+                        device=device,
+                    )
+                    responses.extend(batch_responses)
+                except Exception as e:
+                    print(f"    Batch failed at [{batch_start}:{batch_end}] ({e}), falling back to sequential")
+                    for prompt, images in zip(batch_prompts, batch_images):
+                        r = generate_with_hooks(
+                            model, processor, prompt, images,
+                            fwd_pre_hooks, fwd_hooks,
+                            max_new_tokens=max_new_tokens,
+                            device=device,
+                        )
+                        responses.append(r)
+        else:
             for prompt, images in zip(all_prompts, all_images_list):
                 r = generate_with_hooks(
                     model, processor, prompt, images,
@@ -572,6 +584,8 @@ def main():
                         help="Run Qwen3Guard inline on non-refusal responses")
     parser.add_argument("--layer_range", type=int, nargs=2, default=None, metavar=("START", "END"),
                         help="Only sweep layers START..END (e.g. --layer_range 0 20)")
+    parser.add_argument("--batch_size", type=int, default=8,
+                        help="Behaviors per batch on CUDA (default 8, set 1 for sequential)")
     parser.add_argument("--use_attacks", action="store_true",
                         help="Use attack replacement images instead of base concept images")
     parser.add_argument("--no_decode_prompt", action="store_true",
@@ -629,6 +643,7 @@ def main():
         max_image_size=args.max_image_size, verbose=args.verbose,
         layer_range=args.layer_range, judge=args.judge,
         decode_prompt=not args.no_decode_prompt,
+        batch_size=args.batch_size,
     )
 
     # Plot
