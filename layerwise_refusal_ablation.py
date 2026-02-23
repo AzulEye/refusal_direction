@@ -398,7 +398,7 @@ def run_ablation_sweep(model, processor, model_base, direction, behaviors,
             })
 
             if verbose:
-                print(f"    [{tag}] {bid}: {response[:300]}")
+                print(f"    [{tag}] {bid}:\n{response}")
 
         refusal_rate = n_refusals / n_total if n_total > 0 else 0.0
         n_not_refused = n_total - n_refusals
