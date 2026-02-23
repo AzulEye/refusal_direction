@@ -235,7 +235,7 @@ def run_ablation_sweep(model, processor, model_base, direction, behaviors,
     If judge=True, also classifies non-refusal responses with Qwen3Guard inline.
     If decode_prompt=True, wraps the prompt with CoT instruction to decode X1/X2.
     """
-    from pipeline.utils.hook_utils import get_layerwise_direction_ablation_hooks
+    from pipeline.utils.hook_utils import get_single_layer_direction_ablation_hooks
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -270,13 +270,13 @@ def run_ablation_sweep(model, processor, model_base, direction, behaviors,
     }
 
     for K in sweep_points:
-        label = "baseline" if K == -1 else f"ablate_0_to_{K}"
+        label = "baseline" if K == -1 else f"ablate_{K}"
 
         if K == -1:
             fwd_pre_hooks, fwd_hooks = [], []
         else:
-            fwd_pre_hooks, fwd_hooks = get_layerwise_direction_ablation_hooks(
-                model_base, direction, max_layer=K
+            fwd_pre_hooks, fwd_hooks = get_single_layer_direction_ablation_hooks(
+                model_base, direction, layer=K
             )
 
         n_refusals = 0
@@ -420,7 +420,7 @@ def run_ablation_sweep(model, processor, model_base, direction, behaviors,
         results["sweep"].append(sweep_entry)
         results["per_behavior"][label] = per_beh_results
 
-        layer_desc = "baseline (no ablation)" if K == -1 else f"layers [0..{K}]"
+        layer_desc = "baseline (no ablation)" if K == -1 else f"layer {K}"
         line = f"  K={K:3d} ({layer_desc}): refusal rate = {refusal_rate:.1%}  ({n_refusals}/{n_total})"
         if judge:
             line += f"  ASR = {asr:.1%} ({n_comply} comply, {n_misunderstand} misunderstand)"
