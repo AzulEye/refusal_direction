@@ -65,7 +65,13 @@ def is_refusal(response: str) -> bool:
 
 # ── Data loading ─────────────────────────────────────────────────────────────
 
-def load_behaviors(data_root, max_behaviors=None, use_base=True):
+def _normalize_replacement_label(value):
+    """Normalize replacement labels for robust matching."""
+    return str(value).strip().lower().replace("_", " ")
+
+
+def load_behaviors(data_root, max_behaviors=None, use_base=True,
+                   replacement_filter=None, one_image_per_slot=False):
     """Load visual replacement behaviors with all images per slot variable.
     
     If use_base=True, loads from data/base/ (clear concept photos).
@@ -83,6 +89,17 @@ def load_behaviors(data_root, max_behaviors=None, use_base=True):
 
         with open(meta_path) as f:
             meta = json.load(f)
+
+        if replacement_filter:
+            target = _normalize_replacement_label(replacement_filter)
+            slot_repls = meta.get("slot_replacements", {}) or {}
+            repl_values = [
+                _normalize_replacement_label(v)
+                for v in slot_repls.values()
+                if v is not None
+            ]
+            if target not in repl_values:
+                continue
 
         bid_img_dir = os.path.join(images_dir, bid)
         if not os.path.isdir(bid_img_dir):
@@ -104,8 +121,9 @@ def load_behaviors(data_root, max_behaviors=None, use_base=True):
         flat_image_paths = []
         slot_ranges = {}  # slot -> (start_idx, end_idx) 1-indexed
         for slot in ordered_slots:
+            selected_paths = [slot_images[slot][0]] if one_image_per_slot else slot_images[slot]
             start = len(flat_image_paths) + 1  # 1-indexed
-            flat_image_paths.extend(slot_images[slot])
+            flat_image_paths.extend(selected_paths)
             end = len(flat_image_paths)
             slot_ranges[slot] = (start, end)
 
@@ -588,6 +606,10 @@ def main():
                         help="Behaviors per batch on CUDA (default 8, set 1 for sequential)")
     parser.add_argument("--use_attacks", action="store_true",
                         help="Use attack replacement images instead of base concept images")
+    parser.add_argument("--replacement_filter", type=str, default=None,
+                        help="Keep only behaviors whose slot_replacements include this object (e.g. banana)")
+    parser.add_argument("--one_image_per_slot", action="store_true",
+                        help="Use only the first image per slot (X1/X2/...) instead of all images")
     parser.add_argument("--no_decode_prompt", action="store_true",
                         help="Disable CoT decode prompt (don't force model to name X1/X2)")
     parser.add_argument("--device", type=str, default=None)
@@ -627,9 +649,13 @@ def main():
     # Load behaviors
     use_base = not args.use_attacks
     behaviors = load_behaviors(args.data_root, max_behaviors=args.max_behaviors,
-                               use_base=use_base)
+                               use_base=use_base,
+                               replacement_filter=args.replacement_filter,
+                               one_image_per_slot=args.one_image_per_slot)
     img_type = "base concept" if use_base else "attack replacement"
-    print(f"Loaded {len(behaviors)} behaviors (using {img_type} images)")
+    per_slot_mode = "first image per slot" if args.one_image_per_slot else "all images per slot"
+    repl_desc = f", replacement filter='{args.replacement_filter}'" if args.replacement_filter else ""
+    print(f"Loaded {len(behaviors)} behaviors (using {img_type} images, {per_slot_mode}{repl_desc})")
 
     if not behaviors:
         print("ERROR: No behaviors found.")

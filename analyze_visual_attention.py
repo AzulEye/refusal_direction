@@ -22,7 +22,12 @@ import torch
 from PIL import Image
 
 
-def load_behaviors(data_root, max_behaviors=None):
+def _normalize_replacement_label(value):
+    """Normalize replacement labels for robust matching."""
+    return str(value).strip().lower().replace("_", " ")
+
+
+def load_behaviors(data_root, max_behaviors=None, replacement_filter=None):
     """
     Load visual replacement behaviors from dataset.
     Selects only ONE image per slot variable (X1, X2, ...) to match
@@ -42,6 +47,17 @@ def load_behaviors(data_root, max_behaviors=None):
 
         with open(meta_path) as f:
             meta = json.load(f)
+
+        if replacement_filter:
+            target = _normalize_replacement_label(replacement_filter)
+            slot_repls = meta.get("slot_replacements", {}) or {}
+            repl_values = [
+                _normalize_replacement_label(v)
+                for v in slot_repls.values()
+                if v is not None
+            ]
+            if target not in repl_values:
+                continue
 
         # Collect local attack images
         attack_dir = os.path.join(attacks_dir, bid)
@@ -258,6 +274,8 @@ def main():
                         help="Max number of behaviors to process (for fast iteration)")
     parser.add_argument("--max_image_size", type=int, default=256,
                         help="Max image dimension (shorter side). Smaller = fewer visual tokens.")
+    parser.add_argument("--replacement_filter", type=str, default=None,
+                        help="Keep only behaviors whose slot_replacements include this object (e.g. banana)")
     parser.add_argument("--device", type=str, default=None,
                         help="Device override (auto-detected if not set)")
     args = parser.parse_args()
@@ -289,8 +307,13 @@ def main():
     print(f"Model loaded. LM layers: {model.config.text_config.num_hidden_layers}")
 
     # Load behaviors
-    behaviors = load_behaviors(args.data_root, max_behaviors=args.max_behaviors)
-    print(f"Loaded {len(behaviors)} behaviors")
+    behaviors = load_behaviors(
+        args.data_root,
+        max_behaviors=args.max_behaviors,
+        replacement_filter=args.replacement_filter,
+    )
+    repl_desc = f" (replacement filter='{args.replacement_filter}')" if args.replacement_filter else ""
+    print(f"Loaded {len(behaviors)} behaviors{repl_desc}")
 
     if not behaviors:
         print("ERROR: No behaviors found. Check --data_root path.")
