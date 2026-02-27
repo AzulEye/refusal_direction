@@ -360,6 +360,7 @@ def run_ablation_sweep(
     verbose=False,
     layer_range=None,
     batch_size=8,
+    judge=False,
     csv_path=None,
 ):
     """
@@ -393,6 +394,12 @@ def run_ablation_sweep(
     }
 
     use_batch = (device.type == "cuda" and batch_size > 1)
+
+    guard_classifier = None
+    if judge:
+        from pipeline.submodules.evaluate_jailbreak import Qwen3GuardClassifier
+        print("Loading Qwen3Guard model for inline judging...")
+        guard_classifier = Qwen3GuardClassifier()
 
     for K in sweep_points:
         label = "baseline" if K == -1 else f"ablate_{K}"
@@ -456,10 +463,34 @@ def run_ablation_sweep(
                 )
 
         n_refusals = 0
+        n_comply = 0
+        n_misunderstand = 0
         per_ex_results = []
         for ex, response in zip(examples, responses):
             refused = is_refusal(response)
             n_refusals += int(refused)
+
+            if refused:
+                tag = "REFUSE"
+                guard_comply = False if judge else None
+            else:
+                if guard_classifier is not None:
+                    classifications = guard_classifier.classify_responses(
+                        prompts=[ex["prompt"]],
+                        responses=[response],
+                    )
+                    guard_comply = bool(classifications[0])
+                    if guard_comply:
+                        tag = "COMPLY"
+                        n_comply += 1
+                    else:
+                        tag = "MISUNDERSTAND"
+                        n_misunderstand += 1
+                else:
+                    # Without Qwen3Guard, treat non-refusal as comply.
+                    guard_comply = None
+                    tag = "COMPLY"
+                    n_comply += 1
 
             per_ex_results.append(
                 {
@@ -468,34 +499,49 @@ def run_ablation_sweep(
                     "prompt": ex["prompt"],
                     "image_path": ex["image_path"],
                     "refused": refused,
-                    "classification": "REFUSE" if refused else "NON_REFUSE",
+                    "classification": tag,
+                    "guard_comply": guard_comply,
                     "response": response,
                     "response_preview": response[:200],
                 }
             )
 
             if verbose and K == -1:
-                tag = "REFUSE" if refused else "NON_REFUSE"
                 print(f"  [{tag}] {ex['sample_id']}:\n{response}")
 
         n_total = len(examples)
         refusal_rate = n_refusals / n_total if n_total > 0 else 0.0
-        results["sweep"].append(
-            {
-                "K": K,
-                "label": label,
-                "refusal_rate": refusal_rate,
-                "n_refusals": n_refusals,
-                "n_total": n_total,
-            }
-        )
+        sweep_entry = {
+            "K": K,
+            "label": label,
+            "refusal_rate": refusal_rate,
+            "n_refusals": n_refusals,
+            "n_total": n_total,
+        }
+        if judge:
+            asr = n_comply / n_total if n_total > 0 else 0.0
+            sweep_entry.update(
+                {
+                    "n_comply": n_comply,
+                    "n_misunderstand": n_misunderstand,
+                    "asr": asr,
+                }
+            )
+        results["sweep"].append(sweep_entry)
         results["per_example"][label] = per_ex_results
 
         layer_desc = "baseline" if K == -1 else f"layer {K}"
-        print(
+        line = (
             f"  K={K:3d} ({layer_desc}): refusal rate = "
             f"{refusal_rate:.1%} ({n_refusals}/{n_total})"
         )
+        if judge:
+            asr = n_comply / n_total if n_total > 0 else 0.0
+            line += (
+                f"  ASR = {asr:.1%} "
+                f"({n_comply} comply, {n_misunderstand} misunderstand)"
+            )
+        print(line)
 
         if device.type == "mps":
             torch.mps.empty_cache()
@@ -607,6 +653,8 @@ def main():
     parser.add_argument("--path_replace", nargs=2, metavar=("OLD_PREFIX", "NEW_PREFIX"),
                         default=None,
                         help="Optional prefix remap for image paths stored in CSV")
+    parser.add_argument("--judge", action="store_true",
+                        help="Run Qwen3Guard on non-refusal responses to classify COMPLY vs MISUNDERSTAND")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--layer_range", type=int, nargs=2, default=None, metavar=("START", "END"),
                         help="Only sweep START..END layers (plus baseline)")
@@ -672,6 +720,7 @@ def main():
         verbose=args.verbose,
         layer_range=args.layer_range,
         batch_size=args.batch_size,
+        judge=args.judge,
         csv_path=args.csv_path,
     )
 

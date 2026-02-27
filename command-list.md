@@ -21,6 +21,7 @@ python analyze_visual_attention_csv.py \
     --model_path Qwen/Qwen3-VL-32B-Instruct \
     --csv_path attacks_replace_with_object_prompts.csv \
     --data_root dataset \
+    --path_replace /Users/aharonazulay/Downloads/data_custom dataset/visual_replacement/data \
     --output_dir measurements/visual_attention_32b_csv \
     --max_rows 0 --max_image_size 512 \
     --prompt_contains banana \
@@ -31,11 +32,13 @@ python layerwise_refusal_ablation_csv.py \
     --model_alias Qwen3-VL-32B-Instruct \
     --csv_path attacks_replace_with_object_prompts.csv \
     --data_root dataset \
+    --path_replace /Users/aharonazulay/Downloads/data_custom dataset/visual_replacement/data \
     --output_dir measurements/visual_attention_32b_csv \
     --attention_json measurements/visual_attention_32b_csv/attention_curve.json \
     --max_rows 0 --max_image_size 512 \
     --layer_range 0 20 \
     --batch_size 8 \
+    --judge \
     --verbose \
     --prompt_contains banana \
     2>&1 | tee measurements/visual_attention_32b_csv/32b_single_layer_sweep.log
