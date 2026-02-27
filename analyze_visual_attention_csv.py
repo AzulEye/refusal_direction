@@ -16,6 +16,7 @@ Usage:
 
 import argparse
 import csv
+import glob
 import json
 import os
 
@@ -25,18 +26,134 @@ import torch
 from PIL import Image
 
 
-def resolve_image_path(csv_path: str, image_value: str) -> str:
-    """Resolve image path from CSV value (supports absolute or CSV-relative)."""
+def _unique_paths(paths):
+    """Deduplicate path candidates while preserving order."""
+    seen = set()
+    out = []
+    for p in paths:
+        if not p:
+            continue
+        ap = os.path.abspath(p)
+        if ap not in seen:
+            seen.add(ap)
+            out.append(ap)
+    return out
+
+
+def _extract_attacks_or_base_relpath(path_text):
+    """
+    Extract a relative path beginning at attacks/ or base/, if present.
+    Example:
+      /foo/bar/attacks/bomb/x.png -> attacks/bomb/x.png
+    """
+    norm = str(path_text).replace("\\", "/")
+    for marker in ("/attacks/", "/base/"):
+        idx = norm.find(marker)
+        if idx != -1:
+            return norm[idx + 1:]
+    if norm.startswith("attacks/") or norm.startswith("base/"):
+        return norm
+    return None
+
+
+def _candidate_roots(csv_path, data_root=None):
+    """Candidate roots for remapping CSV image paths across machines."""
+    csv_dir = os.path.dirname(os.path.abspath(csv_path))
+    cwd = os.getcwd()
+    bases = [
+        data_root,
+        csv_dir,
+        cwd,
+        os.path.join(csv_dir, "dataset"),
+        os.path.join(cwd, "dataset"),
+        "/workspace/refusal_direction",
+        "/workspace/refusal_direction/dataset",
+        "/workspace",
+    ]
+
+    roots = []
+    for base in bases:
+        if not base:
+            continue
+        roots.extend(
+            [
+                base,
+                os.path.join(base, "data_custom"),
+                os.path.join(base, "data_object_replacement_simple"),
+                os.path.join(base, "data_custom", "data_object_replacement_simple"),
+                os.path.join(base, "data_object_replacement_simple", "data_custom"),
+            ]
+        )
+
+    # Auto-discover nearby directories that directly contain attacks/ and base/.
+    scan_bases = [p for p in _unique_paths([data_root, csv_dir, cwd, os.path.join(cwd, "dataset"), os.path.join(csv_dir, "dataset")]) if p and os.path.isdir(p)]
+    for sb in scan_bases:
+        for pattern in ("*/attacks", "*/base", "*/*/attacks", "*/*/base"):
+            for matched in glob.glob(os.path.join(sb, pattern)):
+                roots.append(os.path.dirname(matched))
+
+    return [p for p in _unique_paths(roots) if os.path.isdir(p)]
+
+
+def resolve_image_path(
+    csv_path: str,
+    image_value: str,
+    data_root=None,
+    path_replace=None,
+    candidate_roots=None,
+) -> str:
+    """Resolve image path from CSV value with optional cross-machine remapping."""
     image_value = str(image_value).strip()
+    csv_dir = os.path.dirname(os.path.abspath(csv_path))
+    candidates = []
+
+    # Direct interpretation (absolute or CSV-relative).
     if os.path.isabs(image_value):
-        return image_value
-    return os.path.abspath(os.path.join(os.path.dirname(csv_path), image_value))
+        candidates.append(image_value)
+    else:
+        candidates.append(os.path.join(csv_dir, image_value))
+
+    # Explicit prefix replacement, e.g.:
+    # --path_replace /Users/.../data_custom /workspace/refusal_direction/dataset/data_custom
+    if path_replace:
+        old_prefix, new_prefix = path_replace
+        old_prefix = os.path.normpath(old_prefix)
+        new_prefix = os.path.normpath(new_prefix)
+        norm_value = os.path.normpath(image_value)
+
+        if norm_value == old_prefix or norm_value.startswith(old_prefix + os.sep):
+            rel = os.path.relpath(norm_value, old_prefix)
+            candidates.append(os.path.join(new_prefix, rel))
+        elif str(image_value).startswith(str(old_prefix)):
+            rel = str(image_value)[len(str(old_prefix)):].lstrip("/\\")
+            candidates.append(os.path.join(new_prefix, rel))
+
+    # Automatic remapping by preserving attacks/... or base/... suffix.
+    rel = _extract_attacks_or_base_relpath(image_value)
+    if rel:
+        roots = candidate_roots or _candidate_roots(csv_path, data_root=data_root)
+        for root in roots:
+            candidates.append(os.path.join(root, rel))
+
+    for candidate in _unique_paths(candidates):
+        if os.path.isfile(candidate):
+            return candidate
+
+    return ""
 
 
-def load_csv_examples(csv_path, max_rows=None, prompt_contains=None):
+def load_csv_examples(
+    csv_path,
+    max_rows=None,
+    prompt_contains=None,
+    data_root=None,
+    path_replace=None,
+):
     """Load prompt/image rows from CSV and validate image paths."""
     examples = []
     skipped = 0
+    missing_image_samples = []
+    roots = _candidate_roots(csv_path, data_root=data_root)
 
     with open(csv_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -49,10 +166,19 @@ def load_csv_examples(csv_path, max_rows=None, prompt_contains=None):
 
         for i, row in enumerate(reader, start=1):
             prompt = str(row.get("prompt", "")).strip()
-            image_path = resolve_image_path(csv_path, row.get("image", ""))
+            raw_image = str(row.get("image", "")).strip()
+            image_path = resolve_image_path(
+                csv_path,
+                raw_image,
+                data_root=data_root,
+                path_replace=path_replace,
+                candidate_roots=roots,
+            )
 
             if not prompt or not image_path:
                 skipped += 1
+                if raw_image and len(missing_image_samples) < 3:
+                    missing_image_samples.append(raw_image)
                 continue
             if prompt_contains and prompt_contains.lower() not in prompt.lower():
                 continue
@@ -73,6 +199,14 @@ def load_csv_examples(csv_path, max_rows=None, prompt_contains=None):
                 break
 
     print(f"Loaded {len(examples)} examples from {csv_path} (skipped={skipped})")
+    if not examples and missing_image_samples:
+        print("Sample unresolved image paths from CSV:")
+        for p in missing_image_samples:
+            print(f"  - {p}")
+        print(
+            "Hint: pass --data_root <dir_with_attacks_and_base> or "
+            "--path_replace <old_prefix> <new_prefix>"
+        )
     return examples
 
 
@@ -253,6 +387,11 @@ def main():
                         help="Max image dimension (thumbnail size)")
     parser.add_argument("--prompt_contains", type=str, default=None,
                         help="Optional substring filter on prompt text")
+    parser.add_argument("--data_root", type=str, default=None,
+                        help="Optional root containing attacks/ and base/ folders for path remapping")
+    parser.add_argument("--path_replace", nargs=2, metavar=("OLD_PREFIX", "NEW_PREFIX"),
+                        default=None,
+                        help="Optional prefix remap for image paths stored in CSV")
     parser.add_argument("--device", type=str, default=None,
                         help="Device override (cuda/mps/cpu)")
     parsed_args = parser.parse_args()
@@ -271,9 +410,14 @@ def main():
         parsed_args.csv_path,
         max_rows=parsed_args.max_rows,
         prompt_contains=parsed_args.prompt_contains,
+        data_root=parsed_args.data_root,
+        path_replace=parsed_args.path_replace,
     )
     if not examples:
-        raise RuntimeError("No valid CSV rows found.")
+        raise RuntimeError(
+            "No valid CSV rows found. Check image paths in CSV and use "
+            "--data_root or --path_replace to remap paths on this machine."
+        )
 
     print(f"Loading model: {parsed_args.model_path}")
     from transformers import AutoProcessor, Qwen3VLForConditionalGeneration

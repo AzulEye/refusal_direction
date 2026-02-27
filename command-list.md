@@ -15,25 +15,27 @@ unzip -o measurements.zip -d .
 
 # ── 5. Pull latest & run ──
 git pull
-mkdir -p measurements/visual_attention_32b
+mkdir -p measurements/visual_attention_32b_csv
 
 python analyze_visual_attention_csv.py \
     --model_path Qwen/Qwen3-VL-32B-Instruct \
     --csv_path attacks_replace_with_object_prompts.csv \
-    --output_dir measurements/visual_attention_32b \
+    --data_root dataset \
+    --output_dir measurements/visual_attention_32b_csv \
     --max_rows 0 --max_image_size 512 \
     --prompt_contains banana \
-    2>&1 | tee measurements/visual_attention_32b/attention_32b_attacks_banana_single.log
+    2>&1 | tee measurements/visual_attention_32b_csv/attention_32b_attacks_banana_single.log
 
 python layerwise_refusal_ablation_csv.py \
     --model_path Qwen/Qwen3-VL-32B-Instruct \
     --model_alias Qwen3-VL-32B-Instruct \
     --csv_path attacks_replace_with_object_prompts.csv \
-    --output_dir measurements/visual_attention_32b \
-    --attention_json measurements/visual_attention_32b/attention_curve.json \
+    --data_root dataset \
+    --output_dir measurements/visual_attention_32b_csv \
+    --attention_json measurements/visual_attention_32b_csv/attention_curve.json \
     --max_rows 0 --max_image_size 512 \
     --layer_range 0 20 \
     --batch_size 8 \
     --verbose \
     --prompt_contains banana \
-    2>&1 | tee measurements/visual_attention_32b/32b_single_layer_sweep.log
+    2>&1 | tee measurements/visual_attention_32b_csv/32b_single_layer_sweep.log
