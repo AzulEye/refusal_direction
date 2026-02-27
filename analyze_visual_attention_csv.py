@@ -86,11 +86,19 @@ def _candidate_roots(csv_path, data_root=None):
         )
 
     # Auto-discover nearby directories that directly contain attacks/ and base/.
-    scan_bases = [p for p in _unique_paths([data_root, csv_dir, cwd, os.path.join(cwd, "dataset"), os.path.join(csv_dir, "dataset")]) if p and os.path.isdir(p)]
+    # Use recursive scan to tolerate arbitrary nesting from zip extraction.
+    scan_bases = [
+        p
+        for p in _unique_paths(
+            [data_root, csv_dir, cwd, os.path.join(cwd, "dataset"), os.path.join(csv_dir, "dataset")]
+        )
+        if p and os.path.isdir(p)
+    ]
     for sb in scan_bases:
-        for pattern in ("*/attacks", "*/base", "*/*/attacks", "*/*/base"):
-            for matched in glob.glob(os.path.join(sb, pattern)):
-                roots.append(os.path.dirname(matched))
+        for marker in ("attacks", "base"):
+            for matched in glob.glob(os.path.join(sb, "**", marker), recursive=True):
+                if os.path.isdir(matched):
+                    roots.append(os.path.dirname(matched))
 
     return [p for p in _unique_paths(roots) if os.path.isdir(p)]
 
